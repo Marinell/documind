@@ -4,12 +4,11 @@ import com.docanalyzer.anonymization.AnonymizationService;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.DocumentParser;
 import dev.langchain4j.data.document.loader.FileSystemDocumentLoader;
+import dev.langchain4j.data.document.parser.TextDocumentParser;
 import dev.langchain4j.data.document.parser.apache.pdfbox.ApachePdfBoxDocumentParser;
-import dev.langchain4j.data.document.parser.text.TextDocumentParser;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
-import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel; // Using OpenAI for now
 import dev.langchain4j.rag.DefaultRetrievalAugmentor;
@@ -20,6 +19,7 @@ import dev.langchain4j.service.AiServices;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.EmbeddingStoreIngestor;
 import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
+import io.quarkiverse.langchain4j.RegisterAiService;
 import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -40,8 +40,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import com.fasterxml.jackson.databind.ObjectMapper; // For parsing chart JSON
 import com.fasterxml.jackson.core.JsonProcessingException;
+@ApplicationScoped
+public class ChatService {
 
-    private final StreamingChatLanguageModel chatModel;
+    private final OpenAiStreamingChatModel chatModel;
     private final EmbeddingModel embeddingModel;
     private final AnonymizationService anonymizationService;
 
@@ -179,14 +181,14 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 
         StringBuilder currentTextBuffer = new StringBuilder();
         StringBuilder chartJsonBuffer = new StringBuilder();
-        boolean inChartBlock = false;
+        final boolean[] inChartBlock = {false};
 
         try {
             assistant.chat(userMessage)
-                .onNext(token -> {
+                    .onPartialResponse(token -> {
                     String deAnonymizedToken = anonymizationService.deanonymizeResponse(token, sessionId);
 
-                    if (inChartBlock) {
+                    if (inChartBlock[0]) {
                         chartJsonBuffer.append(deAnonymizedToken);
                         // Check for end marker
                         int endIndex = chartJsonBuffer.indexOf(CHART_DATA_END_MARKER);
@@ -194,7 +196,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
                             // Extract JSON, remove marker
                             String jsonPayload = chartJsonBuffer.substring(0, endIndex);
                             chartJsonBuffer.setLength(0); // Clear buffer
-                            inChartBlock = false;
+                            inChartBlock[0] = false;
 
                             try {
                                 Object chartData = objectMapper.readValue(jsonPayload, Object.class);
@@ -227,7 +229,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
                             currentTextBuffer.setLength(0); // Clear buffer
 
                             // Start of chart block found
-                            inChartBlock = true;
+                            inChartBlock[0] = true;
                             chartJsonBuffer.append(deAnonymizedToken.substring(startIndex + CHART_DATA_START_MARKER.length()));
 
                             // Check if the end marker is also in this same token
@@ -235,7 +237,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
                             if (endIndexInSameToken != -1) {
                                 String jsonPayload = chartJsonBuffer.substring(0, endIndexInSameToken);
                                 chartJsonBuffer.setLength(0);
-                                inChartBlock = false;
+                                inChartBlock[0] = false;
                                 try {
                                     Object chartData = objectMapper.readValue(jsonPayload, Object.class);
                                     Map<String, Object> chartEvent = new HashMap<>();
@@ -259,7 +261,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
                         }
                     }
                 })
-                .onComplete(response -> {
+                .onCompleteResponse(response -> {
                     // If there's any remaining text in buffer (e.g. stream ended mid-marker), send it.
                     if (currentTextBuffer.length() > 0) {
                         sendTextToken(eventConsumer, currentTextBuffer.toString());
@@ -274,8 +276,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
                     onComplete.accept("Streaming finished.");
                 })
                 .onError(error -> {
-                    Log.errorf(error, "Error during streaming chat for session: %s", sessionId);
-                    onError.accept(error);
+                    // Log.errorf(error, "Error during streaming chat for session: %s", sessionId);
+                    // onError.accept(error.);
                 })
                 .start();
 
@@ -293,8 +295,4 @@ import com.fasterxml.jackson.core.JsonProcessingException;
         eventConsumer.accept(textEvent);
     }
 
-    // Define the interface for the AI service (Langchain4j's AiService)
-    interface DocumentAssistant {
-        dev.langchain4j.service.TokenStream chat(String message);
-    }
 }
