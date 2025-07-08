@@ -9,7 +9,11 @@ import dev.langchain4j.data.document.parser.apache.pdfbox.ApachePdfBoxDocumentPa
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
+import dev.langchain4j.model.TokenCountEstimator;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel; // Using OpenAI for now
 import dev.langchain4j.rag.DefaultRetrievalAugmentor;
 import dev.langchain4j.rag.RetrievalAugmentor;
@@ -19,7 +23,6 @@ import dev.langchain4j.service.AiServices;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.EmbeddingStoreIngestor;
 import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
-import io.quarkiverse.langchain4j.RegisterAiService;
 import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -59,7 +62,7 @@ public class ChatService {
     public ChatService(EmbeddingModel embeddingModel, AnonymizationService anonymizationService) {
         // It's generally better to inject models if configured by Quarkus,
         // but streaming model needs specific builder setup for API key if not globally set.
-        this.chatModel = OpenAiStreamingChatModel.builder()
+        chatModel = OpenAiStreamingChatModel.builder()
                 .apiKey(openaiApiKey) // Ensure API key is correctly picked up
                 .modelName("gpt-3.5-turbo") // Or your preferred model
                 .temperature(0.3)
@@ -154,8 +157,9 @@ public class ChatService {
                 .contentRetriever(contentRetriever)
                 .build();
 
+
         assistants.put(sessionId, AiServices.builder(DocumentAssistant.class)
-                .streamingChatLanguageModel(chatModel)
+                .streamingChatModel(chatModel)
                 .chatMemory(chatMemory)
                 .retrievalAugmentor(retrievalAugmentor) // Add this line
                 .build());

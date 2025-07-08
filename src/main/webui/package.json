@@ -21,8 +21,8 @@
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zone.js": "~0.14.2",
-    "chart.js": "^4.4.0",  // For charts
-    "ngx-charts": "^20.5.0" // For charts, if preferred
+    "chart.js": "^4.4.0",
+    "ngx-charts": "^20.5.0"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "^17.0.0",

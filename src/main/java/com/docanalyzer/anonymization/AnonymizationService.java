@@ -1,19 +1,14 @@
 package com.docanalyzer.anonymization;
 
-import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
-import io.quarkus.panache.common.Parameters;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import org.eclipse.microprofile.config.inject.ConfigProperty; // For potential future config
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class AnonymizationService {
@@ -22,11 +17,15 @@ public class AnonymizationService {
     private final PlaceholderMappingRepository mappingRepository;
 
     @Inject
-    public AnonymizationService(Optional<AnonymizationProvider> anonymizationProvider, // Optional for now
+    public AnonymizationService(AnonymizationProvider anonymizationProvider, // Optional for now
                                 PlaceholderMappingRepository mappingRepository) {
         // For now, if Deepseek isn't configured, we'll use a dummy provider.
         // This allows the rest of the app to function, albeit without real anonymization.
-        this.anonymizationProvider = anonymizationProvider.orElseGet(DummyAnonymizationProvider::new);
+        if (anonymizationProvider == null) {
+            this.anonymizationProvider = new DummyAnonymizationProvider();
+        } else {
+            this.anonymizationProvider = anonymizationProvider;
+        }
         this.mappingRepository = mappingRepository;
     }
 
@@ -140,22 +139,5 @@ public class AnonymizationService {
 
             return new AnonymizationResult(anonymizedText.toString(), mappings);
         }
-    }
-}
-
-/**
- * Panache Repository for PlaceholderMapping entities.
- */
-@ApplicationScoped
-class PlaceholderMappingRepository implements PanacheRepositoryBase<PlaceholderMapping, Long> {
-
-    public List<PlaceholderMapping> findByChatSessionId(String chatSessionId) {
-        return list("chatSessionId", chatSessionId);
-    }
-
-    public Optional<PlaceholderMapping> findByChatSessionIdAndPlaceholder(String chatSessionId, String placeholder) {
-        return find("chatSessionId = :chatSessionId and placeholder = :placeholder",
-                    Parameters.with("chatSessionId", chatSessionId).and("placeholder", placeholder))
-               .firstResultOptional();
     }
 }
