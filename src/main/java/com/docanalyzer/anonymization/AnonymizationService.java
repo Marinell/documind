@@ -3,6 +3,7 @@ package com.docanalyzer.anonymization;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+// Potentially add import jakarta.enterprise.inject.Default; if needed, or other qualifiers
 
 import java.util.List;
 import java.util.Map;
@@ -17,15 +18,9 @@ public class AnonymizationService {
     private final PlaceholderMappingRepository mappingRepository;
 
     @Inject
-    public AnonymizationService(AnonymizationProvider anonymizationProvider, // Optional for now
+    public AnonymizationService(AnonymizationProvider anonymizationProvider,
                                 PlaceholderMappingRepository mappingRepository) {
-        // For now, if Deepseek isn't configured, we'll use a dummy provider.
-        // This allows the rest of the app to function, albeit without real anonymization.
-        if (anonymizationProvider == null) {
-            this.anonymizationProvider = new DummyAnonymizationProvider();
-        } else {
-            this.anonymizationProvider = anonymizationProvider;
-        }
+        this.anonymizationProvider = anonymizationProvider;
         this.mappingRepository = mappingRepository;
     }
 
@@ -101,6 +96,7 @@ public class AnonymizationService {
      * Placeholder for a real AnonymizationProvider (e.g., DeepseekAnonymizationProvider).
      * This dummy implementation does not actually anonymize but provides the structure.
      */
+    @ApplicationScoped // Make this a CDI bean
     private static class DummyAnonymizationProvider implements AnonymizationProvider {
         private int counter = 1;
         private static final Pattern WORD_PATTERN = Pattern.compile("\\b([A-Z][a-z]+|[A-Z]+)\\b"); // Simple pattern for names/acronyms
@@ -121,11 +117,11 @@ public class AnonymizationService {
                 if (mappings.containsValue(originalValue)) {
                     // find existing placeholder
                     String placeholder = mappings.entrySet().stream()
-                        .filter(entry -> entry.getValue().equals(originalValue))
-                        .findFirst()
-                        .map(Map.Entry::getKey)
-                        .orElse("[UNKNOWN_" + (counter++) + "]"); // Should not happen if logic is correct
-                     matcher.appendReplacement(anonymizedText, Matcher.quoteReplacement(placeholder));
+                            .filter(entry -> entry.getValue().equals(originalValue))
+                            .findFirst()
+                            .map(Map.Entry::getKey)
+                            .orElse("[UNKNOWN_" + (counter++) + "]"); // Should not happen if logic is correct
+                    matcher.appendReplacement(anonymizedText, Matcher.quoteReplacement(placeholder));
                 } else {
                     String placeholder = "[" + chatId.substring(0, Math.min(4, chatId.length())) + "_ENTITY_" + (counter++) + "]";
                     mappings.put(placeholder, originalValue);

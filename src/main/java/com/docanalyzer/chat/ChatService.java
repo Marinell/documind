@@ -20,6 +20,7 @@ import dev.langchain4j.rag.RetrievalAugmentor;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
 import dev.langchain4j.service.AiServices;
+import dev.langchain4j.spi.model.embedding.EmbeddingModelFactory;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.EmbeddingStoreIngestor;
 import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
@@ -47,7 +48,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 public class ChatService {
 
     private final OpenAiStreamingChatModel chatModel;
-    private final EmbeddingModel embeddingModel;
+    // private final EmbeddingModel embeddingModel;
     private final AnonymizationService anonymizationService;
 
     // In-memory stores for simplicity. For production, consider persistent stores.
@@ -59,7 +60,7 @@ public class ChatService {
     String openaiApiKey;
 
     @Inject
-    public ChatService(EmbeddingModel embeddingModel, AnonymizationService anonymizationService) {
+    public ChatService(AnonymizationService anonymizationService) {
         // It's generally better to inject models if configured by Quarkus,
         // but streaming model needs specific builder setup for API key if not globally set.
         chatModel = OpenAiStreamingChatModel.builder()
@@ -67,7 +68,7 @@ public class ChatService {
                 .modelName("gpt-3.5-turbo") // Or your preferred model
                 .temperature(0.3)
                 .build();
-        this.embeddingModel = embeddingModel;
+        // this.embeddingModel = EmbeddingModelFactory embeddingModel;
         this.anonymizationService = anonymizationService;
     }
 
@@ -124,7 +125,7 @@ public class ChatService {
             // 3. Ingest the anonymized document
             EmbeddingStoreIngestor ingestor = EmbeddingStoreIngestor.builder()
                     .embeddingStore(embeddingStore)
-                    .embeddingModel(embeddingModel)
+                    // .embeddingModel(embeddingModel)
                     // Configure text splitter, etc., as needed
                     .build();
             ingestor.ingest(anonymizedDocument);
@@ -148,7 +149,7 @@ public class ChatService {
 
         ContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
                 .embeddingStore(embeddingStore)
-                .embeddingModel(embeddingModel)
+                // .embeddingModel(embeddingModel)
                 .maxResults(3) // How many relevant segments to retrieve
                 .minScore(0.6) // Minimum relevance score
                 .build();
