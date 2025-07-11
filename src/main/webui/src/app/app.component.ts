@@ -4,11 +4,6 @@ import { CommonModule } from '@angular/common'; // Import CommonModule
 
 @Component({
   selector: 'app-root',
-  standalone: true,
-  imports: [
-    CommonModule, // Add CommonModule here
-    RouterOutlet
-  ],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css']
 })

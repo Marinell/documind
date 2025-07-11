@@ -8,8 +8,6 @@ import { Chart, registerables } from 'chart.js/auto'; // Import Chart.js
 
 @Component({
   selector: 'app-chat',
-  standalone: true,
-  imports: [CommonModule, FormsModule],
   templateUrl: './chat.component.html',
   styleUrls: ['./chat.component.css']
 })
