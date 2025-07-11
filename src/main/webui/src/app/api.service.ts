@@ -20,14 +20,14 @@ export interface ChatMessage {
 
 export interface StreamEvent {
   type: 'token' | 'chart' | 'complete' | 'error';
-  data?: any; // Could be string for token, object for chart/error
+  data?: any;
 }
 
 @Injectable({
   providedIn: 'root'
 })
 export class ApiService {
-  private apiUrl = '/api/chat'; // Quarkus backend URL
+  private apiUrl = '/api/chat';
 
   constructor(private http: HttpClient) { }
 
@@ -53,9 +53,8 @@ export class ApiService {
     });
 
     return this.http.request(req).pipe(
-      // It's important to handle HttpEventType.Response to get the body
-      // tap(event => console.log('Upload event:', event)), // For debugging
-      catchError(this.handleError<HttpEvent<UploadResponse>>('uploadDocument'))
+
+      // FIXME catchError(this.handleError<HttpEvent<UploadResponse>>('uploadDocument'))
     );
   }
 
