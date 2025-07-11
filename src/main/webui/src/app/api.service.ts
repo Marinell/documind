@@ -183,7 +183,7 @@ export class ApiService {
         });
       }
       push();
-
+      return;
     }).catch(err => { // Catch for the initial fetch itself (e.g. network error)
         if (!subject.closed) {
           subject.next({ type: 'error', data: { message: 'Failed to connect to stream.', detail: err } });

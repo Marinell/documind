@@ -8,16 +8,17 @@ import { HttpClientModule } from '@angular/common/http';
 
 @NgModule({
   declarations: [
-    AppComponent,
-    ChatComponent
+    // AppComponent and ChatComponent are now standalone, so they are removed from declarations.
   ],
   imports: [
     BrowserModule,
     AppRoutingModule,
-    FormsModule,
-    HttpClientModule
+    FormsModule, // FormsModule can remain here if other non-standalone components in this module need it
+    HttpClientModule, // HttpClientModule can remain here
+    AppComponent,    // Import standalone AppComponent
+    ChatComponent    // Import standalone ChatComponent
   ],
   providers: [],
-  bootstrap: [AppComponent]
+  bootstrap: [AppComponent] // AppComponent is standalone, but still bootstrapped
 })
 export class AppModule { }

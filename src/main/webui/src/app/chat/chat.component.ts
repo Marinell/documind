@@ -7,6 +7,13 @@ import { Subscription, catchError, of, tap } from 'rxjs';
 import { Chart, registerables } from 'chart.js/auto'; // Import Chart.js
 
 @Component({
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    // ApiService is a service, providedIn: 'root', so not needed here
+    // RouterModule might be needed if it used routerLink, but it doesn't appear to.
+  ],
   selector: 'app-chat',
   templateUrl: './chat.component.html',
   styleUrls: ['./chat.component.css']
