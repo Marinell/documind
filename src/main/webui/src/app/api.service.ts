@@ -52,9 +52,10 @@ export class ApiService {
       reportProgress: true, // For upload progress tracking if needed
     });
 
-    return this.http.request(req).pipe(
-
-      // FIXME catchError(this.handleError<HttpEvent<UploadResponse>>('uploadDocument'))
+    return this.http.request<UploadResponse>(req).pipe(
+      // Cast the event type if necessary, or ensure the backend response matches UploadResponse for relevant HttpEventTypes
+      map(event => event as HttpEvent<UploadResponse>), // Add a cast here
+      catchError(this.handleError<HttpEvent<UploadResponse>>('uploadDocument'))
     );
   }
 
@@ -92,9 +93,10 @@ export class ApiService {
         return Promise.reject(new Error(`HTTP error! status: ${response.status}`));
       }
       if (!response.body) {
-        subject.next({ type: 'error', data: { message: 'No response body from server.' } });
+        const noBodyError = new Error('No response body from server.');
+        subject.next({ type: 'error', data: { message: noBodyError.message } });
         subject.complete();
-        return Promise.reject(new Error('No response body'));
+        return Promise.reject(noBodyError); // Explicitly return the rejection
       }
 
       const reader = response.body.getReader();
