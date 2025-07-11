@@ -27,7 +27,7 @@ export interface StreamEvent {
   providedIn: 'root'
 })
 export class ApiService {
-  private apiUrl = '/api/chat';
+  private apiUrl = 'http://localhost:8080/api/chat';
 
   constructor(private http: HttpClient) { }
 

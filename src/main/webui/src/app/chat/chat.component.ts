@@ -7,7 +7,6 @@ import { Subscription, catchError, of, tap } from 'rxjs';
 import { Chart, registerables } from 'chart.js/auto'; // Import Chart.js
 
 @Component({
-  standalone: true,
   imports: [
     CommonModule,
     FormsModule,
@@ -295,4 +294,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       console.error('Error scrolling to bottom:', err);
     }
   }
+
+    checkIfDocumentsUploaded() {
+      return this.messages.filter(m => m.type === 'system' && m.text.includes('uploaded successfully')).length === 0;
+    }
 }

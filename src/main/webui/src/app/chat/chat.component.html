@@ -22,7 +22,7 @@
       </div>
       <div class="document-list">
         <!-- Placeholder for document list - will be populated based on actual tracking -->
-        <p *ngIf="messages.filter(m => m.type === 'system' && m.text.includes('uploaded successfully')).length === 0">
+        <p *ngIf="checkIfDocumentsUploaded()">
             No documents uploaded for this session yet.
         </p>
         <ul>
