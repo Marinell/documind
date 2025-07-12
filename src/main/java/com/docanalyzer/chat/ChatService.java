@@ -14,6 +14,8 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
+import dev.langchain4j.model.openai.OpenAiEmbeddingModelName;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel; // Using OpenAI for now
 import dev.langchain4j.rag.DefaultRetrievalAugmentor;
 import dev.langchain4j.rag.RetrievalAugmentor;
@@ -48,7 +50,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 public class ChatService {
 
     private final OpenAiStreamingChatModel chatModel;
-    // private final EmbeddingModel embeddingModel;
+    private final EmbeddingModel embeddingModel;
     private final AnonymizationService anonymizationService;
 
     // In-memory stores for simplicity. For production, consider persistent stores.
@@ -56,19 +58,22 @@ public class ChatService {
     private final Map<String, ChatMemory> chatMemories = new ConcurrentHashMap<>();
     private final Map<String, DocumentAssistant> assistants = new ConcurrentHashMap<>();
 
-    @ConfigProperty(name = "quarkus.langchain4j.openai.api-key")
-    String openaiApiKey;
+    /*@ConfigProperty(name = "quarkus.langchain4j.openai.api-key")
+    String openaiApiKey;*/
 
     @Inject
-    public ChatService(AnonymizationService anonymizationService) {
+    public ChatService(AnonymizationService anonymizationService, @ConfigProperty(name = "quarkus.langchain4j.openai.api-key") String openaiApiKey) {
         // It's generally better to inject models if configured by Quarkus,
         // but streaming model needs specific builder setup for API key if not globally set.
         chatModel = OpenAiStreamingChatModel.builder()
-                .apiKey(openaiApiKey) // Ensure API key is correctly picked up
+                .apiKey(openaiApiKey)
                 .modelName("gpt-3.5-turbo") // Or your preferred model
                 .temperature(0.3)
                 .build();
-        // this.embeddingModel = EmbeddingModelFactory embeddingModel;
+        this.embeddingModel = OpenAiEmbeddingModel.builder()
+                .apiKey(openaiApiKey)
+                .modelName(OpenAiEmbeddingModelName.TEXT_EMBEDDING_ADA_002)
+                .build();
         this.anonymizationService = anonymizationService;
     }
 
@@ -100,7 +105,11 @@ public class ChatService {
         Path tempFile = Files.createTempFile("upload-", "-" + fileName);
         try {
             Files.copy(documentStream, tempFile, StandardCopyOption.REPLACE_EXISTING);
-            String content = Files.readString(tempFile); // Read content for anonymization
+            // Read file content as bytes first to avoid encoding issues with Files.readString()
+            byte[] fileBytes = Files.readAllBytes(tempFile);
+            // Assume UTF-8 for string conversion. If this is still problematic,
+            // encoding detection or configuration might be needed.
+            String content = new String(fileBytes, java.nio.charset.StandardCharsets.UTF_8);
 
             // 1. Anonymize the document content
             String anonymizedContent = anonymizationService.anonymizeDocument(content, sessionId);
@@ -120,13 +129,12 @@ public class ChatService {
                 documentParser = new TextDocumentParser();
             }
 
-            Document anonymizedDocument = documentParser.parse(new ByteArrayInputStream(anonymizedContent.getBytes()));
+            Document anonymizedDocument = documentParser.parse(new ByteArrayInputStream(anonymizedContent.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 
             // 3. Ingest the anonymized document
             EmbeddingStoreIngestor ingestor = EmbeddingStoreIngestor.builder()
                     .embeddingStore(embeddingStore)
-                    // .embeddingModel(embeddingModel)
-                    // Configure text splitter, etc., as needed
+                    .embeddingModel(embeddingModel)
                     .build();
             ingestor.ingest(anonymizedDocument);
             Log.infof("Document ingested for session: %s, file: %s", sessionId, fileName);
@@ -149,7 +157,7 @@ public class ChatService {
 
         ContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
                 .embeddingStore(embeddingStore)
-                // .embeddingModel(embeddingModel)
+                .embeddingModel(embeddingModel)
                 .maxResults(3) // How many relevant segments to retrieve
                 .minScore(0.6) // Minimum relevance score
                 .build();
@@ -191,100 +199,100 @@ public class ChatService {
         try {
             assistant.chat(userMessage)
                     .onPartialResponse(token -> {
-                    String deAnonymizedToken = anonymizationService.deanonymizeResponse(token, sessionId);
+                        String deAnonymizedToken = anonymizationService.deanonymizeResponse(token, sessionId);
 
-                    if (inChartBlock[0]) {
-                        chartJsonBuffer.append(deAnonymizedToken);
-                        // Check for end marker
-                        int endIndex = chartJsonBuffer.indexOf(CHART_DATA_END_MARKER);
-                        if (endIndex != -1) {
-                            // Extract JSON, remove marker
-                            String jsonPayload = chartJsonBuffer.substring(0, endIndex);
-                            chartJsonBuffer.setLength(0); // Clear buffer
-                            inChartBlock[0] = false;
-
-                            try {
-                                Object chartData = objectMapper.readValue(jsonPayload, Object.class);
-                                Map<String, Object> chartEvent = new HashMap<>();
-                                chartEvent.put("type", "chart");
-                                chartEvent.put("data", chartData);
-                                eventConsumer.accept(chartEvent);
-                                Log.infof("Sent chart data for session %s", sessionId);
-                            } catch (JsonProcessingException e) {
-                                Log.errorf(e, "Failed to parse chart JSON for session %s: %s", sessionId, jsonPayload);
-                                // Send the malformed JSON as text, or send an error?
-                                // For now, send the text that couldn't be parsed.
-                                sendTextToken(eventConsumer, CHART_DATA_START_MARKER + jsonPayload + CHART_DATA_END_MARKER);
-                            }
-                            // Process any text after the end marker in the current token
-                            String remainingTokenPart = deAnonymizedToken.substring(deAnonymizedToken.indexOf(CHART_DATA_END_MARKER) + CHART_DATA_END_MARKER.length());
-                            if (!remainingTokenPart.isEmpty()) {
-                                sendTextToken(eventConsumer, remainingTokenPart);
-                            }
-                        }
-                    } else {
-                        currentTextBuffer.append(deAnonymizedToken);
-                        int startIndex = currentTextBuffer.indexOf(CHART_DATA_START_MARKER);
-                        if (startIndex != -1) {
-                            // Text before marker
-                            String textBeforeMarker = currentTextBuffer.substring(0, startIndex);
-                            if (!textBeforeMarker.isEmpty()) {
-                                sendTextToken(eventConsumer, textBeforeMarker);
-                            }
-                            currentTextBuffer.setLength(0); // Clear buffer
-
-                            // Start of chart block found
-                            inChartBlock[0] = true;
-                            chartJsonBuffer.append(deAnonymizedToken.substring(startIndex + CHART_DATA_START_MARKER.length()));
-
-                            // Check if the end marker is also in this same token
-                            int endIndexInSameToken = chartJsonBuffer.indexOf(CHART_DATA_END_MARKER);
-                            if (endIndexInSameToken != -1) {
-                                String jsonPayload = chartJsonBuffer.substring(0, endIndexInSameToken);
-                                chartJsonBuffer.setLength(0);
+                        if (inChartBlock[0]) {
+                            chartJsonBuffer.append(deAnonymizedToken);
+                            // Check for end marker
+                            int endIndex = chartJsonBuffer.indexOf(CHART_DATA_END_MARKER);
+                            if (endIndex != -1) {
+                                // Extract JSON, remove marker
+                                String jsonPayload = chartJsonBuffer.substring(0, endIndex);
+                                chartJsonBuffer.setLength(0); // Clear buffer
                                 inChartBlock[0] = false;
+
                                 try {
                                     Object chartData = objectMapper.readValue(jsonPayload, Object.class);
                                     Map<String, Object> chartEvent = new HashMap<>();
                                     chartEvent.put("type", "chart");
                                     chartEvent.put("data", chartData);
                                     eventConsumer.accept(chartEvent);
-                                    Log.infof("Sent chart data (within single token block) for session %s", sessionId);
+                                    Log.infof("Sent chart data for session %s", sessionId);
                                 } catch (JsonProcessingException e) {
-                                    Log.errorf(e, "Failed to parse chart JSON (within single token block) for session %s: %s", sessionId, jsonPayload);
+                                    Log.errorf(e, "Failed to parse chart JSON for session %s: %s", sessionId, jsonPayload);
+                                    // Send the malformed JSON as text, or send an error?
+                                    // For now, send the text that couldn't be parsed.
                                     sendTextToken(eventConsumer, CHART_DATA_START_MARKER + jsonPayload + CHART_DATA_END_MARKER);
                                 }
+                                // Process any text after the end marker in the current token
                                 String remainingTokenPart = deAnonymizedToken.substring(deAnonymizedToken.indexOf(CHART_DATA_END_MARKER) + CHART_DATA_END_MARKER.length());
                                 if (!remainingTokenPart.isEmpty()) {
-                                     sendTextToken(eventConsumer, remainingTokenPart);
+                                    sendTextToken(eventConsumer, remainingTokenPart);
                                 }
                             }
                         } else {
-                            // No marker, just send the text
-                            sendTextToken(eventConsumer, deAnonymizedToken);
-                            currentTextBuffer.setLength(0); // Assuming tokens are sent whole
+                            currentTextBuffer.append(deAnonymizedToken);
+                            int startIndex = currentTextBuffer.indexOf(CHART_DATA_START_MARKER);
+                            if (startIndex != -1) {
+                                // Text before marker
+                                String textBeforeMarker = currentTextBuffer.substring(0, startIndex);
+                                if (!textBeforeMarker.isEmpty()) {
+                                    sendTextToken(eventConsumer, textBeforeMarker);
+                                }
+                                currentTextBuffer.setLength(0); // Clear buffer
+
+                                // Start of chart block found
+                                inChartBlock[0] = true;
+                                chartJsonBuffer.append(deAnonymizedToken.substring(startIndex + CHART_DATA_START_MARKER.length()));
+
+                                // Check if the end marker is also in this same token
+                                int endIndexInSameToken = chartJsonBuffer.indexOf(CHART_DATA_END_MARKER);
+                                if (endIndexInSameToken != -1) {
+                                    String jsonPayload = chartJsonBuffer.substring(0, endIndexInSameToken);
+                                    chartJsonBuffer.setLength(0);
+                                    inChartBlock[0] = false;
+                                    try {
+                                        Object chartData = objectMapper.readValue(jsonPayload, Object.class);
+                                        Map<String, Object> chartEvent = new HashMap<>();
+                                        chartEvent.put("type", "chart");
+                                        chartEvent.put("data", chartData);
+                                        eventConsumer.accept(chartEvent);
+                                        Log.infof("Sent chart data (within single token block) for session %s", sessionId);
+                                    } catch (JsonProcessingException e) {
+                                        Log.errorf(e, "Failed to parse chart JSON (within single token block) for session %s: %s", sessionId, jsonPayload);
+                                        sendTextToken(eventConsumer, CHART_DATA_START_MARKER + jsonPayload + CHART_DATA_END_MARKER);
+                                    }
+                                    String remainingTokenPart = deAnonymizedToken.substring(deAnonymizedToken.indexOf(CHART_DATA_END_MARKER) + CHART_DATA_END_MARKER.length());
+                                    if (!remainingTokenPart.isEmpty()) {
+                                        sendTextToken(eventConsumer, remainingTokenPart);
+                                    }
+                                }
+                            } else {
+                                // No marker, just send the text
+                                sendTextToken(eventConsumer, deAnonymizedToken);
+                                currentTextBuffer.setLength(0); // Assuming tokens are sent whole
+                            }
                         }
-                    }
-                })
-                .onCompleteResponse(response -> {
-                    // If there's any remaining text in buffer (e.g. stream ended mid-marker), send it.
-                    if (currentTextBuffer.length() > 0) {
-                        sendTextToken(eventConsumer, currentTextBuffer.toString());
-                        currentTextBuffer.setLength(0);
-                    }
-                    if (chartJsonBuffer.length() > 0) { // Stream ended while in chart block
-                        Log.warnf("Stream ended while in chart block for session %s. Sending buffered content as text.", sessionId);
-                        sendTextToken(eventConsumer, CHART_DATA_START_MARKER + chartJsonBuffer.toString());
-                        chartJsonBuffer.setLength(0);
-                    }
-                    Log.infof("Streaming complete for session: %s", sessionId);
-                    onComplete.accept("Streaming finished.");
-                })
-                .onError(error -> {
-                    // Log.errorf(error, "Error during streaming chat for session: %s", sessionId);
-                    // onError.accept(error.);
-                })
-                .start();
+                    })
+                    .onCompleteResponse(response -> {
+                        // If there's any remaining text in buffer (e.g. stream ended mid-marker), send it.
+                        if (currentTextBuffer.length() > 0) {
+                            sendTextToken(eventConsumer, currentTextBuffer.toString());
+                            currentTextBuffer.setLength(0);
+                        }
+                        if (chartJsonBuffer.length() > 0) { // Stream ended while in chart block
+                            Log.warnf("Stream ended while in chart block for session %s. Sending buffered content as text.", sessionId);
+                            sendTextToken(eventConsumer, CHART_DATA_START_MARKER + chartJsonBuffer.toString());
+                            chartJsonBuffer.setLength(0);
+                        }
+                        Log.infof("Streaming complete for session: %s", sessionId);
+                        onComplete.accept("Streaming finished.");
+                    })
+                    .onError(error -> {
+                        // Log.errorf(error, "Error during streaming chat for session: %s", sessionId);
+                        // onError.accept(error.);
+                    })
+                    .start();
 
         } catch (Exception e) {
             Log.errorf(e, "Failed to process chat message for session %s", sessionId);
