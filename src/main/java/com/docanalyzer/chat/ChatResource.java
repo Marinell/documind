@@ -82,6 +82,10 @@ public class ChatResource {
         try (InputStream fileStream = Files.newInputStream(fileUpload.uploadedFile())) {
             chatService.ingestDocument(sessionId, fileStream, fileUpload.fileName());
             return Response.ok(Collections.singletonMap("message", "File uploaded and processing started successfully for " + fileUpload.fileName())).build();
+        } catch (ChatServiceException e) {
+            LOG.errorf(e, "A chat service error occurred for session %s: %s", sessionId, e.getMessage());
+            // Return a 400 Bad Request for client-side errors (e.g., config missing)
+            return Response.status(Response.Status.BAD_REQUEST).entity(Collections.singletonMap("error", e.getMessage())).build();
         } catch (IllegalStateException e) {
             LOG.errorf(e, "Error processing upload for session %s: Session not found or not initialized.", sessionId);
             return Response.status(Response.Status.NOT_FOUND).entity(Collections.singletonMap("error", e.getMessage())).build();
