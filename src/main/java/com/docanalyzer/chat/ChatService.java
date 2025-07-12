@@ -63,6 +63,9 @@ public class ChatService {
 
     @Inject
     public ChatService(AnonymizationService anonymizationService, @ConfigProperty(name = "quarkus.langchain4j.openai.api-key") String openaiApiKey) {
+        if (openaiApiKey == null || openaiApiKey.isBlank()) {
+            throw new ChatServiceException("OpenAI API key is not configured. Please set 'quarkus.langchain4j.openai.api-key' in your application properties.");
+        }
         // It's generally better to inject models if configured by Quarkus,
         // but streaming model needs specific builder setup for API key if not globally set.
         chatModel = OpenAiStreamingChatModel.builder()
@@ -105,33 +108,21 @@ public class ChatService {
         Path tempFile = Files.createTempFile("upload-", "-" + fileName);
         try {
             Files.copy(documentStream, tempFile, StandardCopyOption.REPLACE_EXISTING);
-            // Read file content as bytes first to avoid encoding issues with Files.readString()
             byte[] fileBytes = Files.readAllBytes(tempFile);
-            // Assume UTF-8 for string conversion. If this is still problematic,
-            // encoding detection or configuration might be needed.
             String content = new String(fileBytes, java.nio.charset.StandardCharsets.UTF_8);
 
-            // 1. Anonymize the document content
             String anonymizedContent = anonymizationService.anonymizeDocument(content, sessionId);
             Log.debugf("Anonymized content for session %s, file %s: %s", sessionId, fileName, anonymizedContent.substring(0, Math.min(anonymizedContent.length(), 100)) + "...");
 
-
-            // 2. Create a document from the anonymized content
-            // We need a DocumentParser. Let's choose based on file type.
             DocumentParser documentParser;
             if (fileName.toLowerCase().endsWith(".pdf")) {
                 documentParser = new ApachePdfBoxDocumentParser();
-            } else if (fileName.toLowerCase().endsWith(".txt") || fileName.toLowerCase().endsWith(".md")) {
-                documentParser = new TextDocumentParser();
             } else {
-                // Fallback or throw error for unsupported types
-                Log.warnf("Unsupported file type for parsing: %s. Treating as plain text.", fileName);
                 documentParser = new TextDocumentParser();
             }
 
             Document anonymizedDocument = documentParser.parse(new ByteArrayInputStream(anonymizedContent.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 
-            // 3. Ingest the anonymized document
             EmbeddingStoreIngestor ingestor = EmbeddingStoreIngestor.builder()
                     .embeddingStore(embeddingStore)
                     .embeddingModel(embeddingModel)
@@ -139,9 +130,13 @@ public class ChatService {
             ingestor.ingest(anonymizedDocument);
             Log.infof("Document ingested for session: %s, file: %s", sessionId, fileName);
 
-            // Re-create or update the assistant for this session as documents change
             createOrUpdateAssistant(sessionId);
 
+        } catch (Exception e) {
+            // Log the original exception for debugging purposes
+            Log.errorf(e, "Error during document ingestion for session %s, file %s", sessionId, fileName);
+            // Wrap the exception in a custom exception to be handled by the resource layer
+            throw new ChatServiceException("Failed to ingest document: " + e.getMessage(), e);
         } finally {
             Files.deleteIfExists(tempFile); // Clean up temporary file
         }
