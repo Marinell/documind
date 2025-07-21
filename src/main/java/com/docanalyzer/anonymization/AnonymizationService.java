@@ -3,9 +3,11 @@ package com.docanalyzer.anonymization;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+// Potentially add import jakarta.enterprise.inject.Default; if needed, or other qualifiers
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
