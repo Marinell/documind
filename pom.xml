@@ -40,24 +40,9 @@
       <artifactId>quarkus-jdbc-mysql</artifactId>
     </dependency>
     <dependency>
-      <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j</artifactId>
-      <version>1.1.0</version>
-    </dependency>
-    <!--<dependency>
       <groupId>io.quarkiverse.langchain4j</groupId>
       <artifactId>quarkus-langchain4j-openai</artifactId>
       <version>0.26.2</version>
-    </dependency>-->
-    <dependency>
-      <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j-embeddings</artifactId>
-      <version>0.32.0</version>
-    </dependency>
-    <dependency>
-      <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j-open-ai</artifactId>
-      <version>1.1.0</version>
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
@@ -96,11 +81,6 @@
       <groupId>io.quarkiverse.tika</groupId>
       <artifactId>quarkus-tika</artifactId>
       <version>2.1.0</version>
-    </dependency>
-    <dependency>
-      <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j-document-parser-apache-pdfbox</artifactId>
-      <version>0.32.0</version>
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
