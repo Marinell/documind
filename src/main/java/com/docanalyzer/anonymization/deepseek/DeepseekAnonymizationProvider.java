@@ -1,9 +1,6 @@
 package com.docanalyzer.anonymization.deepseek;
 
 import com.docanalyzer.anonymization.AnonymizationProvider;
-import com.docanalyzer.anonymization.deepseek.DeepseekClient;
-import com.docanalyzer.anonymization.deepseek.DeepseekRequest;
-import com.docanalyzer.anonymization.deepseek.DeepseekResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,12 +45,11 @@ public class DeepseekAnonymizationProvider implements AnonymizationProvider {
                 "- A JSON mapping of placeholders to their original values must be provided.\n" +
                 "### TASK ###\n" +
                 "Your primary task is to anonymize the given text by replacing all references to people, places, or sensitive information with placeholders in the format [[placeholder_name]]. Then, provide a JSON mapping of these placeholders to their original values.\n" +
-                "### INPUT TEXT ###\n" +
-                "The input text is: Marco Marinelli è uno studente che abita in via Ca' Paletta 25/A.\n" +
-                "### ANONYMIZED TEXT & PLACEHOLDER MAPPING ###\n" +
-                "### ANONYMIZED TEXT ###\n" +
+                "### EXAMPLE INPUT TEXT ###\n" +
+                "For example, the input text is: Marco Marinelli è uno studente che abita in via Ca' Paletta 25/A.\n" +
+                "### EXAMPLE ANONYMIZED TEXT ###\n" +
                 "[[Person_Name]] è uno studente che abita in [[Address]].\n" +
-                "### PLACEHOLDER MAPPING ###\n" +
+                "### EXAMPLE PLACEHOLDER MAPPING ###\n" +
                 "```json\n" +
                 "{\n" +
                 "  \"Person_Name\": \"Marco Marinelli\",\n" +
@@ -69,7 +65,7 @@ public class DeepseekAnonymizationProvider implements AnonymizationProvider {
                 "  \"Address\": \"via Ca' Paletta 25/A\"\n" +
                 "}```\n" +
                 "### INPUT TEXT ###\n" +
-                "The input text is: " + text;
+                "The input text to anonymize is the following: " + text;
     }
 
     private AnonymizationResult parseResponse(String response) {

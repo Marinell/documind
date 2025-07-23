@@ -1,7 +1,5 @@
 package com.docanalyzer.anonymization.deepseek;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 public class DeepseekRequest {
 
     private String model = "deepseek-coder"; // or whatever model is appropriate
