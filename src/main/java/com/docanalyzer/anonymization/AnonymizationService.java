@@ -1,5 +1,6 @@
 package com.docanalyzer.anonymization;
 
+import com.docanalyzer.anonymization.deepseek.DeepseekAnonymizationProvider;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -12,14 +13,18 @@ import java.util.regex.Pattern;
 @ApplicationScoped
 public class AnonymizationService {
 
-    private final AnonymizationProvider anonymizationProvider;
+    private final DeepseekAnonymizationProvider anonymizationProvider;
+    private final PlaceholderService placeholderService;
     private final PlaceholderMappingRepository mappingRepository;
 
     @Inject
-    public AnonymizationService(AnonymizationProvider anonymizationProvider,
-                                PlaceholderMappingRepository mappingRepository) {
+    public AnonymizationService(DeepseekAnonymizationProvider anonymizationProvider,
+                                PlaceholderMappingRepository mappingRepository,
+                                PlaceholderService placeholderService
+    ) {
         this.anonymizationProvider = anonymizationProvider;
         this.mappingRepository = mappingRepository;
+        this.placeholderService = placeholderService;
     }
 
     /**
@@ -30,7 +35,6 @@ public class AnonymizationService {
      * @param chatSessionId The ID of the chat session.
      * @return The anonymized document text.
      */
-    @Transactional
     public String anonymizeDocument(String originalDocument, String chatSessionId) {
         if (originalDocument == null || originalDocument.isBlank()) {
             return originalDocument;
@@ -38,13 +42,7 @@ public class AnonymizationService {
 
         AnonymizationProvider.AnonymizationResult result = anonymizationProvider.anonymize(originalDocument, chatSessionId);
 
-        result.getMappings().forEach((placeholder, originalValue) -> {
-            PlaceholderMapping mapping = new PlaceholderMapping();
-            mapping.setChatSessionId(chatSessionId);
-            mapping.setPlaceholder(placeholder);
-            mapping.setOriginalValue(originalValue);
-            mappingRepository.persist(mapping);
-        });
+        placeholderService.savePlaceholders(result, chatSessionId);
 
         return result.getAnonymizedText();
     }
@@ -90,48 +88,4 @@ public class AnonymizationService {
         mappingRepository.delete("chatSessionId", chatSessionId);
     }
 
-    /**
-     * Placeholder for a real AnonymizationProvider (e.g., DeepseekAnonymizationProvider).
-     * This dummy implementation does not actually anonymize but provides the structure.
-     */
-    @ApplicationScoped // Make this a CDI bean
-    private static class DummyAnonymizationProvider implements AnonymizationProvider {
-        private int counter = 1;
-        private static final Pattern WORD_PATTERN = Pattern.compile("\\b([A-Z][a-z]+|[A-Z]+)\\b"); // Simple pattern for names/acronyms
-
-        @Override
-        public AnonymizationResult anonymize(String text, String chatId) {
-            // WARNING: This is a very naive dummy anonymizer.
-            // It just replaces capitalized words with placeholders.
-            // This is NOT suitable for real anonymization.
-            // A real implementation would call Deepseek or a similar service.
-            StringBuffer anonymizedText = new StringBuffer();
-            Matcher matcher = WORD_PATTERN.matcher(text);
-            Map<String, String> mappings = new java.util.HashMap<>();
-
-            while (matcher.find()) {
-                String originalValue = matcher.group(1);
-                // Avoid re-mapping if already seen (simple check)
-                if (mappings.containsValue(originalValue)) {
-                    // find existing placeholder
-                    String placeholder = mappings.entrySet().stream()
-                            .filter(entry -> entry.getValue().equals(originalValue))
-                            .findFirst()
-                            .map(Map.Entry::getKey)
-                            .orElse("[UNKNOWN_" + (counter++) + "]"); // Should not happen if logic is correct
-                    matcher.appendReplacement(anonymizedText, Matcher.quoteReplacement(placeholder));
-                } else {
-                    String placeholder = "[" + chatId.substring(0, Math.min(4, chatId.length())) + "_ENTITY_" + (counter++) + "]";
-                    mappings.put(placeholder, originalValue);
-                    matcher.appendReplacement(anonymizedText, Matcher.quoteReplacement(placeholder));
-                }
-            }
-            matcher.appendTail(anonymizedText);
-
-            System.out.println("DummyAnonymizer Mappings for " + chatId + ": " + mappings);
-            System.out.println("DummyAnonymizer Text for " + chatId + ": " + anonymizedText.toString());
-
-            return new AnonymizationResult(anonymizedText.toString(), mappings);
-        }
-    }
 }
