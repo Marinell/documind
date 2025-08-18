@@ -2,7 +2,7 @@ package com.docanalyzer.anonymization.deepseek;
 
 public class DeepseekRequest {
 
-    private String model = "deepseek-coder"; // or whatever model is appropriate
+    private String model = "deepseek-r1:1.5b"; // or whatever model is appropriate
     private String prompt;
     private boolean stream = false;
 
