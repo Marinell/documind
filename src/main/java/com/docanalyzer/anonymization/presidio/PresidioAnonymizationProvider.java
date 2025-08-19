@@ -7,6 +7,7 @@ import com.docanalyzer.anonymization.presidio.model.PresidioAnonymizeRequest;
 import com.docanalyzer.anonymization.presidio.model.PresidioAnonymizeResponse;
 import com.docanalyzer.anonymization.presidio.model.RecognizerResult;
 import jakarta.enterprise.context.ApplicationScoped;
+import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.util.Collections;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Slf4j
 @ApplicationScoped
 public class PresidioAnonymizationProvider implements AnonymizationProvider {
 
@@ -61,6 +63,10 @@ public class PresidioAnonymizationProvider implements AnonymizationProvider {
         StringBuilder anonymizedTextBuilder = new StringBuilder(text);
 
         for (RecognizerResult result : recognizerResults) {
+            log.info("RESULT SCORE: " + result.getScore());
+            if (result.getScore() < 0.70) {
+                continue;
+            }
             String entityType = result.getEntityType();
             int count = entityCounters.computeIfAbsent(entityType, k -> new AtomicInteger(0)).incrementAndGet();
             String placeholder = String.format("[[%s_%d]]", entityType.toUpperCase(), count);

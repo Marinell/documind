@@ -28,7 +28,9 @@ public class ChatService {
     private static final String SYSTEM_MESSAGE_PROMPT =  "You are an expert document assistant, specialized in the business, financial, tax and legal sector." +
             " Your task is to analyze the provided document text and provide an answer to the user query." +
             " Focus on identifying key information." +
-            " Do not mention that you are an AI. Response in markdown format. If you don't know the answer, say so.";
+            " You will find anonymized information in the document with the following format: [[PLACEHOLDER_1]]. It is extremely important that you keep this format also in the output." +
+            " Do not mention that you are an AI. Response in markdown format. If you don't know the answer, say so." +
+            " The output must be entirely in the same language of the user query. it is very important.";
 
     @Inject
     AnonymizationService anonymizationService;
@@ -88,7 +90,17 @@ public class ChatService {
             HuggingFaceResponse response = huggingFaceClient.createChatCompletion(request, "Bearer " + apiToken);
 
             String responseContent = response.getChoices().get(0).getMessage().getContent();
-            String deAnonymizedToken = anonymizationService.deanonymizeResponse(responseContent, sessionId);
+
+            StringBuilder sb = new StringBuilder(responseContent);
+            String startTag = "<think>";
+            String endTag = "</think>";
+
+            //removing the text between tag
+            sb.replace(responseContent.indexOf(startTag) + startTag.length(), responseContent.indexOf(endTag), "");
+
+            String res = sb.toString().replace(startTag, "").replace(endTag, "");
+
+            String deAnonymizedToken = anonymizationService.deanonymizeResponse(res, sessionId);
 
             sendTextToken(eventConsumer, deAnonymizedToken);
         } catch (Exception e) {

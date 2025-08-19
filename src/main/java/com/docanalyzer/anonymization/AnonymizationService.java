@@ -3,6 +3,7 @@ package com.docanalyzer.anonymization;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Map;
@@ -10,6 +11,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @ApplicationScoped
+@Slf4j
 public class AnonymizationService {
 
     private final AnonymizationProvider anonymizationProvider;
@@ -59,8 +61,11 @@ public class AnonymizationService {
             return anonymizedResponse;
         }
 
+        log.info("anonymizedResponse: " + anonymizedResponse);
+
         List<PlaceholderMapping> mappings = mappingRepository.findByChatSessionId(chatSessionId);
         if (mappings.isEmpty()) {
+            log.info("NO PLACEHOLDERS MAPPINGS");
             return anonymizedResponse; // No mappings for this session
         }
 
