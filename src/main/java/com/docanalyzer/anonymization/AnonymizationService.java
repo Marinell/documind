@@ -1,6 +1,5 @@
 package com.docanalyzer.anonymization;
 
-import com.docanalyzer.anonymization.deepseek.DeepseekAnonymizationProvider;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -13,12 +12,12 @@ import java.util.regex.Pattern;
 @ApplicationScoped
 public class AnonymizationService {
 
-    private final DeepseekAnonymizationProvider anonymizationProvider;
+    private final AnonymizationProvider anonymizationProvider;
     private final PlaceholderService placeholderService;
     private final PlaceholderMappingRepository mappingRepository;
 
     @Inject
-    public AnonymizationService(DeepseekAnonymizationProvider anonymizationProvider,
+    public AnonymizationService(AnonymizationProvider anonymizationProvider,
                                 PlaceholderMappingRepository mappingRepository,
                                 PlaceholderService placeholderService
     ) {

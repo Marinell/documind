@@ -1,6 +1,5 @@
 package com.docanalyzer.anonymization;
 
-import com.docanalyzer.anonymization.deepseek.DeepseekAnonymizationProvider;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
