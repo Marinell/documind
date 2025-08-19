@@ -1,6 +1,6 @@
 version: '3.8'
 services:
   presidio-analyzer:
-    image: mcr.microsoft.com/presidio-analyzer:latest
+    build: ./src/main/java/com/docanalyzer/anonymization/presidio
     ports:
       - "3000:3000"

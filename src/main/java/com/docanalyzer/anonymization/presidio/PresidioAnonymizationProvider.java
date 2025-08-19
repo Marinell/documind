@@ -8,6 +8,7 @@ import com.docanalyzer.anonymization.presidio.model.PresidioAnonymizeResponse;
 import com.docanalyzer.anonymization.presidio.model.RecognizerResult;
 import jakarta.enterprise.context.ApplicationScoped;
 import lombok.extern.slf4j.Slf4j;
+import com.docanalyzer.anonymization.presidio.model.AddRecognizerRequest;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.util.Collections;
@@ -24,6 +25,7 @@ public class PresidioAnonymizationProvider implements AnonymizationProvider {
 
     public PresidioAnonymizationProvider(@RestClient PresidioClient presidioClient) {
         this.presidioClient = presidioClient;
+        this.presidioClient.addRecognizer(new AddRecognizerRequest("/usr/local/lib/python3.8/site-packages/flair_recognizer.py"));
     }
 
     @Override
