@@ -3,12 +3,14 @@ package com.docanalyzer.anonymization.presidio;
 import com.docanalyzer.anonymization.AnonymizationProvider;
 import com.docanalyzer.anonymization.presidio.model.AnonymizerConfig;
 import com.docanalyzer.anonymization.presidio.model.PresidioAnalyzeRequest;
-import com.docanalyzer.anonymization.presidio.model.PresidioAnonymizeRequest;
-import com.docanalyzer.anonymization.presidio.model.PresidioAnonymizeResponse;
 import com.docanalyzer.anonymization.presidio.model.RecognizerResult;
+import com.docanalyzer.anonymization.presidio.model.recognizer.AdHocRecognizer;
+import com.docanalyzer.anonymization.presidio.model.recognizer.FlairRecognizer;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -27,7 +29,15 @@ public class PresidioAnonymizationProvider implements AnonymizationProvider {
     @Override
     public AnonymizationResult anonymize(String text, String chatId) throws AnonymizationException {
         // 1. Analyze the text
-        PresidioAnalyzeRequest analyzeRequest = new PresidioAnalyzeRequest(text, "en");
+        List<String> supportedEntities = Arrays.asList(
+                "PERSON", "LOCATION", "ORGANIZATION", "NRP", "GPE", "DATE", "TIME", "MONEY", "PERCENT", "FAC", "ORG", "LOC",
+                "CARDINAL", "EVENT", "LANGUAGE", "LAW", "ORDINAL", "PRODUCT", "QUANTITY", "WORK_OF_ART"
+        );
+        AdHocRecognizer flairRecognizer = new FlairRecognizer("flair/ner-english-large", supportedEntities);
+        List<AdHocRecognizer> adHocRecognizers = new ArrayList<>();
+        adHocRecognizers.add(flairRecognizer);
+
+        PresidioAnalyzeRequest analyzeRequest = new PresidioAnalyzeRequest(text, "en", adHocRecognizers);
         List<RecognizerResult> recognizerResults;
         try {
             recognizerResults = presidioClient.analyze(analyzeRequest);
