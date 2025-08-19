@@ -25,6 +25,11 @@ import java.util.function.Consumer;
 @ApplicationScoped
 public class ChatService {
 
+    private static final String SYSTEM_MESSAGE_PROMPT =  "You are an expert document assistant, specialized in the business, financial, tax and legal sector." +
+            " Your task is to analyze the provided document text and provide an answer to the user query." +
+            " Focus on identifying key information." +
+            " Do not mention that you are an AI. Response in markdown format. If you don't know the answer, say so.";
+
     @Inject
     AnonymizationService anonymizationService;
 
@@ -74,7 +79,9 @@ public class ChatService {
         }
 
         try {
-            String prompt = "Document: " + document + "\n\n" + "User query: " + userMessage;
+            String prompt = SYSTEM_MESSAGE_PROMPT +
+                            " The document to analyze is the following: " + document +
+                            "\n\n" + "The User query is the following: " + userMessage;
             Message message = new Message("user", prompt);
             HuggingFaceRequest request = new HuggingFaceRequest(Collections.singletonList(message), model, false);
 
