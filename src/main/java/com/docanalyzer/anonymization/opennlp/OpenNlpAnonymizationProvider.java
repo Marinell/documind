@@ -23,17 +23,17 @@ public class OpenNlpAnonymizationProvider implements AnonymizationProvider {
     private TokenizerME tokenizer;
     private NameFinderME[] nameFinders;
     private static final String[] modelPaths = {
-            "models/en-ner-person.bin",
-            "models/en-ner-location.bin",
-            "models/en-ner-organization.bin"
+            "/models/en-ner-person.bin",
+            "/models/en-ner-location.bin",
+            "/models/en-ner-organization.bin"
     };
-    private static final String TOKENIZER_MODEL_PATH = "models/en-token.bin";
+    private static final String TOKENIZER_MODEL_PATH = "/models/en-token.bin";
 
     @PostConstruct
     void init() {
         try {
             // Load tokenizer model
-            try (InputStream tokenizerModelIn = new FileInputStream(TOKENIZER_MODEL_PATH)) {
+            try (InputStream tokenizerModelIn = getClass().getResourceAsStream(TOKENIZER_MODEL_PATH)) {
                 TokenizerModel tokenizerModel = new TokenizerModel(tokenizerModelIn);
                 tokenizer = new TokenizerME(tokenizerModel);
             }
@@ -41,7 +41,7 @@ public class OpenNlpAnonymizationProvider implements AnonymizationProvider {
             // Load NER models
             nameFinders = new NameFinderME[modelPaths.length];
             for (int i = 0; i < modelPaths.length; i++) {
-                try (InputStream modelIn = new FileInputStream(modelPaths[i])) {
+                try (InputStream modelIn = getClass().getResourceAsStream(modelPaths[i])) {
                     TokenNameFinderModel model = new TokenNameFinderModel(modelIn);
                     nameFinders[i] = new NameFinderME(model);
                 }
@@ -106,7 +106,11 @@ public class OpenNlpAnonymizationProvider implements AnonymizationProvider {
             return Collections.emptyList();
         }
 
-        spans.sort(Comparator.comparingInt(Span::getStart).thenComparingInt(s -> s.getEnd() - s.getStart(), Comparator.reverseOrder()));
+        spans.sort(Comparator
+                .comparingInt(Span::getStart)
+                .thenComparingInt(s -> s.getEnd() - s.getStart())
+                // .reversed()
+        );
 
         List<Span> filteredSpans = new ArrayList<>();
         filteredSpans.add(spans.get(0));
