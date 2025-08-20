@@ -1,10 +1,16 @@
 package com.docanalyzer.anonymization.deepseek;
 
 import com.docanalyzer.anonymization.AnonymizationProvider;
+import com.docanalyzer.huggingface.HuggingFaceClient;
+import com.docanalyzer.huggingface.HuggingFaceRequest;
+import com.docanalyzer.huggingface.HuggingFaceResponse;
+import com.docanalyzer.huggingface.Message;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
+import lombok.extern.slf4j.Slf4j;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.util.Collections;
@@ -13,24 +19,43 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @ApplicationScoped
+@Slf4j
 public class DeepseekAnonymizationProvider implements AnonymizationProvider {
 
     private final DeepseekClient deepseekClient;
+    private final HuggingFaceClient huggingFaceClient;
     private final ObjectMapper objectMapper;
 
-    public DeepseekAnonymizationProvider(@RestClient DeepseekClient deepseekClient, ObjectMapper objectMapper) {
+    @ConfigProperty(name = "anonymization.api.model")
+    String model;
+
+    @ConfigProperty(name = "huggingface.api.token")
+    String apiToken;
+
+    public DeepseekAnonymizationProvider(
+            @RestClient DeepseekClient deepseekClient,
+            ObjectMapper objectMapper,
+            @RestClient HuggingFaceClient huggingFaceClient
+            ) {
         this.deepseekClient = deepseekClient;
+        this.huggingFaceClient = huggingFaceClient;
         this.objectMapper = new ObjectMapper();
     }
 
     @Override
     public AnonymizationResult anonymize(String text, String chatId) throws AnonymizationException {
         String prompt = buildPrompt(text);
-        DeepseekRequest request = new DeepseekRequest(prompt);
+        // DeepseekRequest request = new DeepseekRequest(prompt);
+
+        log.info("PROMPT TO ANONYMIZE: \n " + prompt);
+
+        Message message = new Message("user", prompt);
+        HuggingFaceRequest request = new HuggingFaceRequest(Collections.singletonList(message), model, false);
 
         try {
-            DeepseekResponse response = deepseekClient.generate(request);
-            return parseResponse(response.getResponse());
+            // DeepseekResponse response = deepseekClient.generate(request);
+            HuggingFaceResponse response = huggingFaceClient.createChatCompletion(request, "Bearer " + apiToken);
+            return parseResponse(response.getChoices().get(0).getMessage().getContent());
         } catch (Exception e) {
             throw new AnonymizationException("Failed to call Deepseek API", e);
         }
