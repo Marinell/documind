@@ -9,8 +9,8 @@ public class PresidioAnalyzeRequest {
 
     private String text;
     private String language;
-    @JsonProperty("adHocRecognizers")
-    private List<AdHocRecognizer> adHocRecognizers;
+    /*@JsonProperty("ad_hoc_recognizers")
+    private List<AdHocRecognizer> adHocRecognizers;*/
 
     public PresidioAnalyzeRequest(String text, String language) {
         this.text = text;
@@ -20,7 +20,7 @@ public class PresidioAnalyzeRequest {
     public PresidioAnalyzeRequest(String text, String language, List<AdHocRecognizer> adHocRecognizers) {
         this.text = text;
         this.language = language;
-        this.adHocRecognizers = adHocRecognizers;
+        // this.adHocRecognizers = adHocRecognizers;
     }
 
     //<editor-fold desc="Getters and Setters">
@@ -40,12 +40,12 @@ public class PresidioAnalyzeRequest {
         this.language = language;
     }
 
-    public List<AdHocRecognizer> getAdHocRecognizers() {
+    /*public List<AdHocRecognizer> getAdHocRecognizers() {
         return adHocRecognizers;
     }
 
     public void setAdHocRecognizers(List<AdHocRecognizer> adHocRecognizers) {
         this.adHocRecognizers = adHocRecognizers;
-    }
+    }*/
     //</editor-fold>
 }

@@ -28,16 +28,7 @@ public class PresidioAnonymizationProvider implements AnonymizationProvider {
 
     @Override
     public AnonymizationResult anonymize(String text, String chatId) throws AnonymizationException {
-        // 1. Analyze the text
-        List<String> supportedEntities = Arrays.asList(
-                "PERSON", "LOCATION", "ORGANIZATION", "NRP", "GPE", "DATE", "TIME", "MONEY", "PERCENT", "FAC", "ORG", "LOC",
-                "CARDINAL", "EVENT", "LANGUAGE", "LAW", "ORDINAL", "PRODUCT", "QUANTITY", "WORK_OF_ART"
-        );
-        AdHocRecognizer flairRecognizer = new FlairRecognizer("flair/ner-english-large", supportedEntities);
-        List<AdHocRecognizer> adHocRecognizers = new ArrayList<>();
-        adHocRecognizers.add(flairRecognizer);
-
-        PresidioAnalyzeRequest analyzeRequest = new PresidioAnalyzeRequest(text, "en", adHocRecognizers);
+        PresidioAnalyzeRequest analyzeRequest = new PresidioAnalyzeRequest(text, "en");
         List<RecognizerResult> recognizerResults;
         try {
             recognizerResults = presidioClient.analyze(analyzeRequest);

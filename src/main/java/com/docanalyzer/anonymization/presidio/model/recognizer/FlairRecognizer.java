@@ -6,21 +6,21 @@ import java.util.List;
 
 public class FlairRecognizer extends AdHocRecognizer {
 
-    @JsonProperty("model")
-    private String model;
+    @JsonProperty("name")
+    private String name;
 
-    public FlairRecognizer(String model, List<String> supportedEntities) {
+    public FlairRecognizer(String name, List<String> supportedEntities) {
         super(supportedEntities);
-        this.model = model;
+        this.name = name;
     }
 
     //<editor-fold desc="Getters and Setters">
     public String getModel() {
-        return model;
+        return name;
     }
 
     public void setModel(String model) {
-        this.model = model;
+        this.name = model;
     }
     //</editor-fold>
 }
