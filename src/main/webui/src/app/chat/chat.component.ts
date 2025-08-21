@@ -218,7 +218,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   renderChart(): void {
-    if (!this.currentChartData || !this.chartCanvas) {
+      console.log('this.currentChartData: ', this.currentChartData);
+    if (!this.currentChartData) {
       console.warn('Chart data or canvas not available for rendering.');
       return;
     }

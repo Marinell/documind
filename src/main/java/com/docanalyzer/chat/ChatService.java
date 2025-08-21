@@ -4,15 +4,15 @@ import com.docanalyzer.deepseek.DeepseekClient;
 import com.docanalyzer.deepseek.DeepseekRequest;
 import com.docanalyzer.deepseek.DeepseekResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.memory.ChatMemory;
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jfree.chart.JFreeChart;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -21,6 +21,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 @ApplicationScoped
+@Slf4j
 public class ChatService {
 
     private final DeepseekClient deepseekClient;
@@ -28,7 +29,6 @@ public class ChatService {
 
     // In-memory stores for simplicity. For production, consider persistent stores.
     private final Map<String, String> documents = new ConcurrentHashMap<>();
-    private final Map<String, ChatMemory> chatMemories = new ConcurrentHashMap<>();
 
     @Inject
     public ChatService(@RestClient DeepseekClient deepseekClient, ChartService chartService) {
@@ -39,14 +39,12 @@ public class ChatService {
     public String createNewChatSession() {
         String sessionId = UUID.randomUUID().toString();
         // Initialize resources for the new session
-        chatMemories.put(sessionId, MessageWindowChatMemory.withMaxMessages(10));
         Log.infof("Created new chat session: %s", sessionId);
         return sessionId;
     }
 
     public void clearChatSession(String sessionId) {
         documents.remove(sessionId);
-        chatMemories.remove(sessionId);
         // assistants.remove(sessionId);
         Log.infof("Cleared chat session: %s", sessionId);
     }
@@ -71,15 +69,6 @@ public class ChatService {
     }
 
     private void createOrUpdateAssistant(String sessionId) {
-        ChatMemory chatMemory = chatMemories.get(sessionId);
-
-        if (chatMemory == null) {
-            throw new IllegalStateException("Session not properly initialized for assistant creation: " + sessionId);
-        }
-        /*assistants.put(sessionId, AiServices.builder(DocumentAssistant.class)
-                .chatMemory(chatMemory)
-                .build());
-                */
 
         Log.infof("Assistant created/updated for session: %s", sessionId);
     }
@@ -91,26 +80,19 @@ public class ChatService {
     public void streamChatResponse(String sessionId, String userMessage,
                                    Consumer<Map<String, Object>> eventConsumer, // Changed to accept a map for different event types
                                    Consumer<String> onComplete, Consumer<Throwable> onError) {
-        ChatMemory chatMemory = chatMemories.get(sessionId);
         String document = documents.get(sessionId);
-
-        if ( chatMemory == null) {
-            Log.errorf("Chat session not found or assistant not initialized: %s", sessionId);
-            onError.accept(new IllegalStateException("Chat session not initialized or document not processed."));
-            return;
-        }
-
-        StringBuilder currentTextBuffer = new StringBuilder();
-        StringBuilder chartJsonBuffer = new StringBuilder();
-        final boolean[] inChartBlock = {false};
 
         try {
 
             DeepseekRequest request = new DeepseekRequest(buildPrompt(userMessage, document));
 
+            log.info("deepseek request:\n" + request.getPrompt());
+
             DeepseekResponse response = deepseekClient.generate(request);
 
-            String fullResponse = response.getResponse();
+            log.info("deepseek response:\n" + response.getResponse());
+
+            String fullResponse = parseResponse(response.getResponse());
             int chartStart = fullResponse.indexOf(CHART_DATA_START_MARKER);
 
             if (chartStart != -1) {
@@ -147,6 +129,12 @@ public class ChatService {
         }
     }
 
+    private String parseResponse(String response) {
+        String parsedResponse = response.replace(response.substring(response.indexOf("<think>"), response.indexOf("</think>")+8), "");
+        log.info("\nparsed response: \n" + parsedResponse);
+        return parsedResponse;
+    }
+
     private void handleChartData(String sessionId, String chartJson, Consumer<Map<String, Object>> eventConsumer, Consumer<Throwable> onError) {
         try {
             Chart chart = objectMapper.readValue(chartJson, Chart.class);
@@ -177,7 +165,7 @@ public class ChatService {
     }
 
     private String buildPrompt(String userMessage, String document) {
-        return "You are an expert document assistant, specialized in the business, financial, tax and legal sector.\n" +
+        /*return "You are an expert document assistant, specialized in the business, financial, tax and legal sector.\n" +
                 "Your task is to analyze the provided document text and answer the user query about the document.\n" +
                 "If the user asks for a chart, you must generate the data for the chart in JSON format, enclosed in " + CHART_DATA_START_MARKER + " and " + CHART_DATA_END_MARKER + " markers.\n" +
                 "The JSON should have the following structure: {\"chartType\": \"bar|pie\", \"title\": \"...\", \"labels\": [\"...\"], \"datasets\": [{\"label\": \"...\", \"data\": [...]}]}.\n" +
@@ -185,6 +173,96 @@ public class ChatService {
                 "Do not mention that you are an AI. Response in markdown format. If you don't know the answer, say so.\n" +
                 "The document to analyze is the following: " + document +
                 " \n The user query on the document is the following: " + userMessage;
+                */
+         return """
+                 ### ROLE ###
+                 
+                 Act as an expert document assistant, specialized in the business, financial, tax, and legal sector. Your role is to analyze the provided document text and answer the user's query about the document.
+                 
+                 ### CONTEXT ###
+                 
+                 - **Document Text Content**: The specific content of the document to be analyzed. (This will be provided separately.)
+                 - **User Query**: The user's question or request regarding the document. (This will be provided separately.)
+                 
+                 ### TASK ###
+                 
+                 Your primary task is to analyze the provided document text and respond to the user's query about the document.\s
+                 
+                 Follow these steps precisely:
+                 
+                 1. Carefully read and understand the document text content.
+                 2. Analyze the user's query to identify what information is being requested.
+                 3. Extract or derive the required information from the document text.
+                 4. If the user requests a chart, generate the data for the chart in JSON format.
+                 5. Format the response in markdown.
+                 
+                 ### EXAMPLES ###
+                 
+                 Example 1:
+                 - Input: User asks for a summary of a specific section in the document.
+                 - Rationale: Identify key points in the specified section.
+                 - Output:\s
+                   ```markdown
+                   ## Summary of Section X
+                   The section discusses [key points].
+                   ```
+                 
+                 Example 2:
+                 - Input: User requests a chart of financial data mentioned in the document.
+                 - Rationale: Identify and extract relevant financial data.
+                 - Output:\s
+                   ```
+                   CHART_DATA_START
+                   {
+                     "chartType": "bar",
+                     "title": "Financial Data Overview",
+                     "labels": ["Revenue", "Expenses", "Profit"],
+                     "datasets": [
+                       {
+                         "label": "Financial Figures",
+                         "data": [100000, 50000, 50000]
+                       }
+                     ]
+                   }
+                   CHART_DATA_END
+                   ```
+                 
+                 ### CONSTRAINTS ###
+                 
+                 - **Tone**: Professional and objective.
+                 - **Style**: Clear and concise.
+                 - **Length**: As necessary to fully address the user's query.
+                 - **Do Not**: Mention that you are an AI.
+                 - **Format**: Responses must be in markdown format.
+                 - **Chart Data**: JSON formatted data enclosed in CHART_DATA_START and CHART_DATA_END.
+                 
+                 ### OUTPUT FORMAT ###
+                 
+                 Provide the final output exclusively in the following format:
+                 
+                 - For text responses:
+                   ```markdown
+                   ## Response
+                   [Your response in markdown format.]
+                   ```
+                 - For chart requests:
+                   ```
+                   CHART_DATA_START
+                   {
+                     "chartType": "bar|pie",
+                     "title": "...",
+                     "labels": ["label_1", "label_2", "label_3", ... , "label_n"],
+                     "datasets": [
+                       {
+                         "label": "...",
+                         "data": [data_1, data_2, data_3, ... , data_n]
+                       }
+                     ]
+                   }
+                   CHART_DATA_END
+                   ```"""
+                 + "\nThe user query is: " + userMessage
+                 + "\nThe document text is: " + document;
     }
 
     private void sendTextToken(Consumer<Map<String, Object>> eventConsumer, String text) {

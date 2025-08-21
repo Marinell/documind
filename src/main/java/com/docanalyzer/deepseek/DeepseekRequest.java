@@ -2,7 +2,7 @@ package com.docanalyzer.deepseek;
 
 public class DeepseekRequest {
 
-    private String model = "deepseek-r1:1.5b"; // or whatever model is appropriate
+    private String model = "deepseek-r1:7b"; // or whatever model is appropriate
     private String prompt;
     private boolean stream = false;
 
