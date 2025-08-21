@@ -16,6 +16,7 @@ import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.RestForm;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -207,5 +208,16 @@ public class ChatResource {
     // Simple DTO for user messages
     public static class UserMessage {
         public String message;
+    }
+
+    @GET
+    @Path("/charts/{fileName}")
+    @Produces("image/png")
+    public Response getChart(@PathParam("fileName") String fileName) {
+        File file = new File("charts", fileName);
+        if (!file.exists()) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        return Response.ok(file).build();
     }
 }
