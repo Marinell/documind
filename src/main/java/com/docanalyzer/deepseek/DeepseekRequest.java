@@ -1,4 +1,4 @@
-package com.docanalyzer.anonymization.deepseek;
+package com.docanalyzer.deepseek;
 
 public class DeepseekRequest {
 

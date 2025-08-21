@@ -1,6 +1,8 @@
 package com.docanalyzer.chat;
 
-import com.docanalyzer.anonymization.AnonymizationService;
+import com.docanalyzer.deepseek.DeepseekClient;
+import com.docanalyzer.deepseek.DeepseekRequest;
+import com.docanalyzer.deepseek.DeepseekResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
@@ -20,17 +22,13 @@ import java.util.function.Consumer;
 @AllArgsConstructor
 public class ChatService {
 
-    private final AnonymizationService anonymizationService;
-    private final DocumentAssistant documentAssistant;
+    // private final DocumentAssistant documentAssistant;
+    private final DeepseekClient deepseekClient;
 
     // In-memory stores for simplicity. For production, consider persistent stores.
     private final Map<String, String> documents = new ConcurrentHashMap<>();
     private final Map<String, ChatMemory> chatMemories = new ConcurrentHashMap<>();
     // private final Map<String, DocumentAssistant> assistants = new ConcurrentHashMap<>();
-
-
-    /*@ConfigProperty(name = "quarkus.langchain4j.openai.api-key")
-    String openaiApiKey;*/
 
     public String createNewChatSession() {
         String sessionId = UUID.randomUUID().toString();
@@ -44,7 +42,6 @@ public class ChatService {
         documents.remove(sessionId);
         chatMemories.remove(sessionId);
         // assistants.remove(sessionId);
-        anonymizationService.clearMappingsForSession(sessionId);
         Log.infof("Cleared chat session: %s", sessionId);
     }
 
@@ -59,9 +56,7 @@ public class ChatService {
             }
 
             // Log.infof("document text content: %s", documentTexts.toString());
-
-            String anonymizedContent = anonymizationService.anonymizeDocument(documentTexts.toString(), sessionId);
-            documents.put(sessionId, anonymizedContent);
+            documents.put(sessionId, documentTexts.toString());
             // createOrUpdateAssistant(sessionId);
         } catch (Exception e) {
             Log.errorf(e, "Error during document ingestion for session %s, file %s", sessionId, fileName);
@@ -94,7 +89,7 @@ public class ChatService {
         ChatMemory chatMemory = chatMemories.get(sessionId);
         String document = documents.get(sessionId);
 
-        if (documentAssistant == null || chatMemory == null) {
+        if ( chatMemory == null) {
             Log.errorf("Chat session not found or assistant not initialized: %s", sessionId);
             onError.accept(new IllegalStateException("Chat session not initialized or document not processed."));
             return;
@@ -106,12 +101,11 @@ public class ChatService {
 
         try {
 
+            DeepseekRequest request = new DeepseekRequest(buildPrompt(userMessage, document));
 
+            DeepseekResponse response = deepseekClient.generate(request);
 
-            String response = documentAssistant.chat(userMessage, document);
-            String deAnonymizedToken = anonymizationService.deanonymizeResponse(response, sessionId);
-
-            currentTextBuffer.append(deAnonymizedToken);
+            currentTextBuffer.append(response.getResponse());
 
             sendTextToken(eventConsumer, currentTextBuffer.toString());
             currentTextBuffer.setLength(0);
@@ -120,6 +114,15 @@ public class ChatService {
             Log.errorf(e, "Failed to process chat message for session %s", sessionId);
             onError.accept(e);
         }
+    }
+
+    private String buildPrompt(String userMessage, String document) {
+        return "You are an expert document assistant, specialized in the business, financial, tax and legal sector.\n" +
+                "        Your task is to analyze the provided document text and answer the user query about the document.\n" +
+                "        Focus on identifying key information.\n" +
+                "        Do not mention that you are an AI. Response in markdown format. If you don't know the answer, say so.\n" +
+                "        The document to analyze is the following: " + document +
+                " \n The user query on the document is the following: " + userMessage;
     }
 
     private void sendTextToken(Consumer<Map<String, Object>> eventConsumer, String text) {

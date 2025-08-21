@@ -1,4 +1,4 @@
-package com.docanalyzer.anonymization.deepseek;
+package com.docanalyzer.deepseek;
 
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
