@@ -8,8 +8,9 @@ import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
-import lombok.AllArgsConstructor;
+import jakarta.inject.Inject;
 import org.apache.tika.Tika;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,7 +20,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 @ApplicationScoped
-@AllArgsConstructor
 public class ChatService {
 
     // private final DocumentAssistant documentAssistant;
@@ -29,6 +29,11 @@ public class ChatService {
     private final Map<String, String> documents = new ConcurrentHashMap<>();
     private final Map<String, ChatMemory> chatMemories = new ConcurrentHashMap<>();
     // private final Map<String, DocumentAssistant> assistants = new ConcurrentHashMap<>();
+
+    @Inject
+    public ChatService(@RestClient DeepseekClient deepseekClient) {
+        this.deepseekClient = deepseekClient;
+    }
 
     public String createNewChatSession() {
         String sessionId = UUID.randomUUID().toString();
