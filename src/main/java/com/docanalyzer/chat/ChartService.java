@@ -28,7 +28,8 @@ public class ChartService {
     private JFreeChart createBarChart(Chart chartData) {
         DefaultCategoryDataset dataset = new DefaultCategoryDataset();
         for (Chart.Dataset ds : chartData.getDatasets()) {
-            for (int i = 0; i < chartData.getLabels().size(); i++) {
+            int size = Math.min(chartData.getLabels().size(), ds.getData().size());
+            for (int i = 0; i < size; i++) {
                 dataset.addValue(ds.getData().get(i), ds.getLabel(), chartData.getLabels().get(i));
             }
         }
@@ -44,8 +45,14 @@ public class ChartService {
 
     private JFreeChart createPieChart(Chart chartData) {
         DefaultPieDataset dataset = new DefaultPieDataset();
-        for (int i = 0; i < chartData.getLabels().size(); i++) {
-            dataset.setValue(chartData.getLabels().get(i), chartData.getDatasets().get(0).getData().get(i));
+        if (chartData.getDatasets() != null && !chartData.getDatasets().isEmpty()) {
+            Chart.Dataset firstDataset = chartData.getDatasets().get(0);
+            if (firstDataset.getData() != null && chartData.getLabels() != null) {
+                int size = Math.min(chartData.getLabels().size(), firstDataset.getData().size());
+                for (int i = 0; i < size; i++) {
+                    dataset.setValue(chartData.getLabels().get(i), firstDataset.getData().get(i));
+                }
+            }
         }
 
         return ChartFactory.createPieChart(

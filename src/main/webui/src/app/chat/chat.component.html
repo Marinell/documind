@@ -1,68 +1,68 @@
 <div class="chat-container">
-  <header class="chat-header">
-    <h2>Document Analyzer Chat</h2>
-    <button (click)="startNewChat()" [disabled]="isLoading" class="new-chat-button">New Chat</button>
-  </header>
+    <header class="chat-header">
+        <h2>Document Analyzer Chat</h2>
+        <button (click)="startNewChat()" [disabled]="isLoading" class="new-chat-button">New Chat</button>
+    </header>
 
-  <div *ngIf="currentError" class="error-banner">
-    <p>{{ currentError }}</p>
-    <button (click)="currentError = null" class="close-error-button">&times;</button>
-  </div>
+    <div *ngIf="currentError" class="error-banner">
+        <p>{{ currentError }}</p>
+        <button (click)="currentError = null" class="close-error-button">&times;</button>
+    </div>
 
-  <div class="chat-main">
-    <aside class="sidebar">
-      <h3>Documents</h3>
-      <div class="file-upload-section">
-        <input type="file" #fileInput (change)="onFileSelected($event)" accept=".pdf,.txt,.md" [disabled]="isLoading || !sessionId" />
-        <div *ngIf="uploadProgress !== null" class="upload-progress-bar">
-          <div [style.width.%]="uploadProgress"></div>
-          <span>{{ uploadProgress }}%</span>
-        </div>
-        <p *ngIf="uploadError" class="error-message">{{ uploadError }}</p>
-      </div>
-      <div class="document-list">
-        <!-- Placeholder for document list - will be populated based on actual tracking -->
-        <p *ngIf="checkIfDocumentsUploaded()">
-            No documents uploaded for this session yet.
-        </p>
-        <ul>
-            <li *ngFor="let msg of messages">
-                <ng-container *ngIf="msg.type === 'system' && msg.text.includes('uploaded successfully')">
-                    {{ msg.text.replace(' uploaded successfully. Ready to chat.', '') }}
-                </ng-container>
-            </li>
-        </ul>
-      </div>
-    </aside>
+    <div class="chat-main">
+        <aside class="sidebar">
+            <h3>Documents</h3>
+            <div class="file-upload-section">
+                <input type="file" #fileInput (change)="onFileSelected($event)" accept=".pdf,.txt,.md" [disabled]="isLoading || !sessionId" />
+                <div *ngIf="uploadProgress !== null" class="upload-progress-bar">
+                    <div [style.width.%]="uploadProgress"></div>
+                    <span>{{ uploadProgress }}%</span>
+                </div>
+                <p *ngIf="uploadError" class="error-message">{{ uploadError }}</p>
+            </div>
+            <div class="document-list">
+                <!-- Placeholder for document list - will be populated based on actual tracking -->
+                <p *ngIf="checkIfDocumentsUploaded()">
+                    No documents uploaded for this session yet.
+                </p>
+                <ul>
+                    <li *ngFor="let msg of messages">
+                        <ng-container *ngIf="msg.type === 'system' && msg.text.includes('uploaded successfully')">
+                            {{ msg.text.replace(' uploaded successfully. Ready to chat.', '') }}
+                        </ng-container>
+                    </li>
+                </ul>
+            </div>
+        </aside>
 
-    <section class="chat-area">
-      <div #chatMessagesContainer class="chat-messages">
-        <div *ngFor="let msg of messages" class="message" [ngClass]="'message-' + msg.type">
-          <div class="message-sender" *ngIf="msg.type !== 'system'">{{ msg.type === 'user' ? 'You' : 'Assistant' }}</div>
-          <div class="message-text" [innerHTML]="msg.text.replace('\\n', '<br>')"></div>
-          <div class="message-timestamp">{{ msg.timestamp | date:'shortTime' }}</div>
-        </div>
-        <div *ngIf="isLoading && messages[messages.length-1]?.type !== 'assistant'" class="message message-assistant">
-            <div class="message-sender">Assistant</div>
-            <div class="message-text typing-indicator"><span></span><span></span><span></span></div>
-        </div>
-      </div>
-      <div class="chat-input">
+        <section class="chat-area">
+            <div #chatMessagesContainer class="chat-messages">
+                <div *ngFor="let msg of messages" class="message" [ngClass]="'message-' + msg.type">
+                    <div class="message-sender" *ngIf="msg.type !== 'system'">{{ msg.type === 'user' ? 'You' : 'Assistant' }}</div>
+                    <div class="message-text"><markdown [data]="msg.text"></markdown></div>
+                    <div class="message-timestamp">{{ msg.timestamp | date:'shortTime' }}</div>
+                </div>
+                <div *ngIf="isLoading && messages[messages.length-1]?.type !== 'assistant'" class="message message-assistant">
+                    <div class="message-sender">Assistant</div>
+                    <div class="message-text typing-indicator"><span></span><span></span><span></span></div>
+                </div>
+            </div>
+            <div class="chat-input">
         <textarea [(ngModel)]="newMessage"
                   placeholder="Type your message here..."
                   (keydown.enter)="sendMessage(); $event.preventDefault()"
                   [disabled]="isLoading || !sessionId"></textarea>
-        <button (click)="sendMessage()" [disabled]="isLoading || !newMessage.trim() || !sessionId">Send</button>
-      </div>
-    </section>
-  </div>
-
-  <!-- Charting area -->
-  <section class="charting-area" *ngIf="currentChartData">
-    <h3>Chart Visualization</h3>
-    <div class="chart-canvas-container">
-      <canvas #chartCanvas></canvas>
+                <button (click)="sendMessage()" [disabled]="isLoading || !newMessage.trim() || !sessionId">Send</button>
+            </div>
+        </section>
     </div>
-  </section>
+
+    <!-- Charting area -->
+    <section class="charting-area" *ngIf="currentChartData">
+        <h3>Chart Visualization</h3>
+        <div class="chart-canvas-container">
+            <canvas #chartCanvas></canvas>
+        </div>
+    </section>
 
 </div>

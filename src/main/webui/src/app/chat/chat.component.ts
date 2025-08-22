@@ -5,14 +5,19 @@ import { ApiService, ChatMessage, StreamEvent } from '../api.service'; // Update
 import { HttpEventType } from '@angular/common/http';
 import { Subscription, catchError, of, tap } from 'rxjs';
 import { Chart, registerables } from 'chart.js/auto'; // Import Chart.js
+import { MarkdownModule } from 'ngx-markdown';
+import { provideMarkdown } from 'ngx-markdown';
+
 
 @Component({
   imports: [
     CommonModule,
     FormsModule,
+    MarkdownModule
     // ApiService is a service, providedIn: 'root', so not needed here
     // RouterModule might be needed if it used routerLink, but it doesn't appear to.
   ],
+  providers: [provideMarkdown()],
   selector: 'app-chat',
   templateUrl: './chat.component.html',
   styleUrls: ['./chat.component.css']

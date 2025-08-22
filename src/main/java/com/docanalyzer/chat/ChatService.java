@@ -3,6 +3,7 @@ package com.docanalyzer.chat;
 import com.docanalyzer.deepseek.DeepseekClient;
 import com.docanalyzer.deepseek.DeepseekRequest;
 import com.docanalyzer.deepseek.DeepseekResponse;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -143,6 +144,7 @@ public class ChatService {
             List<String> labels = new ArrayList<>();
             for (Chart.Dataset data: chart.getDatasets()) {
                 labels.add(data.getLabel());
+                labels.add(data.getLabel());
             }
 
             chart.setLabels(labels);
@@ -162,7 +164,9 @@ public class ChatService {
             // The frontend will use this data to render the chart with Chart.js
             chartEvent.put("data", chart);
             eventConsumer.accept(chartEvent);
-
+        } catch (JsonProcessingException e) {
+            Log.errorf(e, "Failed to parse chart JSON for session %s: %s", sessionId, chartJson);
+            sendTextToken(eventConsumer, "I received chart data in a format I couldn't understand. Please try again.");
         } catch (IOException e) {
             Log.errorf(e, "Error processing or saving chart for session %s", sessionId);
             onError.accept(new RuntimeException("Failed to generate or save chart.", e));
