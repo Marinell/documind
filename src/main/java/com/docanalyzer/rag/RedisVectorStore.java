@@ -7,6 +7,7 @@ import io.quarkus.redis.datasource.json.JsonCommands;
 import io.quarkus.redis.datasource.search.*;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import lombok.extern.slf4j.Slf4j;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 @ApplicationScoped
+@Slf4j
 public class RedisVectorStore {
 
     private static final String INDEX_NAME = "idx:document_chunks";
@@ -40,9 +42,15 @@ public class RedisVectorStore {
         CreateArgs createArgs = new CreateArgs()
                 .onJson()
                 .prefixes(PREFIX);
-        createArgs.indexedField("sessionId", "sessionId", FieldType.TEXT);
-        createArgs.indexedField("text", "text", FieldType.TEXT);
-        createArgs.indexedField("embedding", "embedding", FieldType.VECTOR);
+
+        createArgs.indexedField("$.sessionId", "sessionId", FieldType.TEXT);
+        createArgs.indexedField("$.text", "text", FieldType.TEXT);
+        FieldOptions options = new FieldOptions();
+        options.vectorAlgorithm(VectorAlgorithm.HNSW);
+        options.distanceMetric(DistanceMetric.COSINE);
+        options.dimension(EMBEDDING_DIMENSION);
+        options.vectorType(VectorType.FLOAT32);
+        createArgs.indexedField("$.embedding", "embedding", FieldType.VECTOR, options);
 
         searchCommands.ftCreate(INDEX_NAME, createArgs);
     }
@@ -61,6 +69,7 @@ public class RedisVectorStore {
     }
 
     public List<String> findSimilarChunks(String sessionId, double[] queryEmbedding, int k) {
+        //  {filter_query}=>[KNN {num} @field $query_vec]
         String query = String.format("@sessionId:%s=>[KNN %d @embedding $query_vector as score]", sessionId, k);
         QueryArgs queryArgs = new QueryArgs()
                 .param("query_vector", toByteArray(queryEmbedding))
