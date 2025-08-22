@@ -1,4 +1,4 @@
-package com.docanalyzer.deepseek;
+package com.docanalyzer.ollama;
 
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
@@ -7,10 +7,10 @@ import jakarta.ws.rs.core.MediaType;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 
 @RegisterRestClient(baseUri = "http://localhost:11434")
-public interface DeepseekClient {
+public interface OllamaClient {
 
     @POST
     @Path("/api/generate")
     @Consumes(MediaType.APPLICATION_JSON)
-    DeepseekResponse generate(DeepseekRequest request);
+    OllamaResponse generate(OllamaRequest request);
 }

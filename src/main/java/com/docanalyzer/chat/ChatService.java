@@ -1,8 +1,8 @@
 package com.docanalyzer.chat;
 
-import com.docanalyzer.deepseek.DeepseekClient;
-import com.docanalyzer.deepseek.DeepseekRequest;
-import com.docanalyzer.deepseek.DeepseekResponse;
+import com.docanalyzer.ollama.OllamaClient;
+import com.docanalyzer.ollama.OllamaRequest;
+import com.docanalyzer.ollama.OllamaResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.logging.Log;
@@ -23,15 +23,15 @@ import java.util.function.Consumer;
 @Slf4j
 public class ChatService {
 
-    private final DeepseekClient deepseekClient;
+    private final OllamaClient ollamaClient;
     private final ChartService chartService;
 
     // In-memory stores for simplicity. For production, consider persistent stores.
     private final Map<String, String> documents = new ConcurrentHashMap<>();
 
     @Inject
-    public ChatService(@RestClient DeepseekClient deepseekClient, ChartService chartService) {
-        this.deepseekClient = deepseekClient;
+    public ChatService(@RestClient OllamaClient ollamaClient, ChartService chartService) {
+        this.ollamaClient = ollamaClient;
         this.chartService = chartService;
     }
 
@@ -83,11 +83,11 @@ public class ChatService {
 
         try {
 
-            DeepseekRequest request = new DeepseekRequest(buildPrompt(userMessage, document));
+            OllamaRequest request = new OllamaRequest(buildPrompt(userMessage, document));
 
             log.info("deepseek request:\n" + request.getPrompt());
 
-            DeepseekResponse response = deepseekClient.generate(request);
+            OllamaResponse response = ollamaClient.generate(request);
 
             log.info("deepseek response:\n" + response.getResponse());
 
