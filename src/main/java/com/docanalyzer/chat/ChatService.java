@@ -1,8 +1,11 @@
 package com.docanalyzer.chat;
 
 import com.docanalyzer.ollama.OllamaClient;
+import com.docanalyzer.ollama.OllamaEmbeddingRequest;
 import com.docanalyzer.ollama.OllamaRequest;
 import com.docanalyzer.ollama.OllamaResponse;
+import com.docanalyzer.rag.DocumentSplitter;
+import com.docanalyzer.rag.RedisVectorStore;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.logging.Log;
@@ -16,60 +19,52 @@ import org.jfree.chart.JFreeChart;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+
 @ApplicationScoped
 @Slf4j
 public class ChatService {
 
     private final OllamaClient ollamaClient;
     private final ChartService chartService;
-
-    // In-memory stores for simplicity. For production, consider persistent stores.
-    private final Map<String, String> documents = new ConcurrentHashMap<>();
+    private final RedisVectorStore vectorStore;
+    private final DocumentSplitter documentSplitter;
 
     @Inject
-    public ChatService(@RestClient OllamaClient ollamaClient, ChartService chartService) {
+    public ChatService(@RestClient OllamaClient ollamaClient, ChartService chartService, RedisVectorStore vectorStore) {
         this.ollamaClient = ollamaClient;
         this.chartService = chartService;
+        this.vectorStore = vectorStore;
+        this.documentSplitter = new DocumentSplitter(512, 100);
     }
 
     public String createNewChatSession() {
         String sessionId = UUID.randomUUID().toString();
-        // Initialize resources for the new session
         Log.infof("Created new chat session: %s", sessionId);
         return sessionId;
     }
 
-    public void clearChatSession(String sessionId) {
-        documents.remove(sessionId);
-        // assistants.remove(sessionId);
-        Log.infof("Cleared chat session: %s", sessionId);
-    }
-
     public void ingestDocument(String sessionId, InputStream documentStream, String fileName) throws IOException {
         try {
-            StringBuilder documentTexts = new StringBuilder();
             Tika tika = new Tika();
-            try {
-                    String text = tika.parseToString(documentStream);
-                    documentTexts.append(text).append(" --- ");
-            } catch (Exception e) {
+            String text = tika.parseToString(documentStream);
+            List<String> chunks = documentSplitter.split(text);
+            for (int i = 0; i < chunks.size(); i++) {
+                String chunk = chunks.get(i);
+                OllamaEmbeddingRequest request = new OllamaEmbeddingRequest("nomic-embed-text", chunk);
+                double[] embedding = ollamaClient.embed(request).getEmbedding();
+                vectorStore.addDocumentChunk(sessionId, sessionId + "-" + i, chunk, embedding);
             }
-
-            // Log.infof("document text content: %s", documentTexts.toString());
-            documents.put(sessionId, documentTexts.toString());
-            // createOrUpdateAssistant(sessionId);
         } catch (Exception e) {
             Log.errorf(e, "Error during document ingestion for session %s, file %s", sessionId, fileName);
             throw new ChatServiceException("Failed to ingest document: " + e.getMessage(), e);
         }
-    }
-
-    private void createOrUpdateAssistant(String sessionId) {
-
-        Log.infof("Assistant created/updated for session: %s", sessionId);
     }
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -77,25 +72,24 @@ public class ChatService {
     private static final String CHART_DATA_END_MARKER = "CHART_DATA_END";
 
     public void streamChatResponse(String sessionId, String userMessage,
-                                   Consumer<Map<String, Object>> eventConsumer, // Changed to accept a map for different event types
+                                   Consumer<Map<String, Object>> eventConsumer,
                                    Consumer<String> onComplete, Consumer<Throwable> onError) {
-        String document = documents.get(sessionId);
+        OllamaEmbeddingRequest embeddingRequest = new OllamaEmbeddingRequest("nomic-embed-text", userMessage);
+        double[] userQueryEmbedding = ollamaClient.embed(embeddingRequest).getEmbedding();
+        List<String> similarChunks = vectorStore.findSimilarChunks(sessionId, userQueryEmbedding, 5);
+        String context = similarChunks.stream().collect(Collectors.joining("\n---\n"));
 
         try {
-
-            OllamaRequest request = new OllamaRequest(buildPrompt(userMessage, document));
-
+            OllamaRequest request = new OllamaRequest(buildPrompt(userMessage, context));
             log.info("deepseek request:\n" + request.getPrompt());
 
             OllamaResponse response = ollamaClient.generate(request);
-
             log.info("deepseek response:\n" + response.getResponse());
 
             String fullResponse = parseResponse(response.getResponse());
             int chartStart = fullResponse.indexOf(CHART_DATA_START_MARKER);
 
             if (chartStart != -1) {
-                // Text part before the chart
                 String textPart = fullResponse.substring(0, chartStart).trim();
                 if (!textPart.isEmpty()) {
                     sendTextToken(eventConsumer, textPart);
@@ -106,17 +100,14 @@ public class ChatService {
                     String chartJson = fullResponse.substring(chartStart + CHART_DATA_START_MARKER.length(), chartEnd).trim();
                     handleChartData(sessionId, chartJson, eventConsumer, onError);
 
-                    // Text part after the chart
                     String remainingText = fullResponse.substring(chartEnd + CHART_DATA_END_MARKER.length()).trim();
                     if (!remainingText.isEmpty()) {
                         sendTextToken(eventConsumer, remainingText);
                     }
                 } else {
-                    // No end marker found, treat the rest as text
-                     sendTextToken(eventConsumer, fullResponse.substring(chartStart));
+                    sendTextToken(eventConsumer, fullResponse.substring(chartStart));
                 }
             } else {
-                // No chart data found, send the whole response as text
                 sendTextToken(eventConsumer, fullResponse);
             }
 
@@ -149,19 +140,15 @@ public class ChatService {
 
             chart.setLabels(labels);
 
-            // Generate chart image
             JFreeChart jfreechart = chartService.createChart(chart);
             String chartFileName = "chart-" + sessionId + "-" + System.currentTimeMillis() + ".png";
-            // Define a directory to store charts. This should be configurable.
             String chartDir = "charts";
-            new File(chartDir).mkdirs(); // Ensure directory exists
+            new File(chartDir).mkdirs();
             String filePath = chartDir + File.separator + chartFileName;
             chartService.saveChartAsPng(jfreechart, filePath);
 
-            // Send chart data to the frontend, including the URL to the image
             Map<String, Object> chartEvent = new HashMap<>();
             chartEvent.put("type", "chart");
-            // The frontend will use this data to render the chart with Chart.js
             chartEvent.put("data", chart);
             eventConsumer.accept(chartEvent);
         } catch (JsonProcessingException e) {
@@ -177,15 +164,6 @@ public class ChatService {
     }
 
     private String buildPrompt(String userMessage, String document) {
-        /*return "You are an expert document assistant, specialized in the business, financial, tax and legal sector.\n" +
-                "Your task is to analyze the provided document text and answer the user query about the document.\n" +
-                "If the user asks for a chart, you must generate the data for the chart in JSON format, enclosed in " + CHART_DATA_START_MARKER + " and " + CHART_DATA_END_MARKER + " markers.\n" +
-                "The JSON should have the following structure: {\"chartType\": \"bar|pie\", \"title\": \"...\", \"labels\": [\"...\"], \"datasets\": [{\"label\": \"...\", \"data\": [...]}]}.\n" +
-                "Focus on identifying key information.\n" +
-                "Do not mention that you are an AI. Response in markdown format. If you don't know the answer, say so.\n" +
-                "The document to analyze is the following: " + document +
-                " \n The user query on the document is the following: " + userMessage;
-                */
          return """
                  ### ROLE ###
                  
@@ -302,5 +280,4 @@ public class ChatService {
         textEvent.put("data", text);
         eventConsumer.accept(textEvent);
     }
-
 }
