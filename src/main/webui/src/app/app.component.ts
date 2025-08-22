@@ -12,5 +12,5 @@ import { CommonModule } from '@angular/common'; // Import CommonModule
   styleUrls: ['./app.component.css']
 })
 export class AppComponent {
-  title = 'Document Analyzer';
+  title = 'Documind';
 }

@@ -37,6 +37,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   currentChartData: any | null = null; // To store chart data
   private chartInstance: Chart | null = null; // To hold Chart.js instance
 
+  selectedFileName: string | null = null;
+  uploadedDocuments: string[] = [];
+
   private streamSubscription: Subscription | null = null;
 
   constructor(private apiService: ApiService, private cdr: ChangeDetectorRef) {
@@ -108,6 +111,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     const file = element.files?.[0];
 
     if (file && this.sessionId) {
+        this.selectedFileName = file.name;
       this.uploadProgress = 0;
       this.uploadError = null;
       this.currentError = null;
@@ -121,8 +125,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
           } else if (httpEvent.type === HttpEventType.Response) {
             this.uploadProgress = null;
             this.addMessage('system', `${file.name} uploaded successfully. Ready to chat.`);
+            this.uploadedDocuments.push(file.name);
             console.log('Upload complete:', httpEvent.body);
             this.isLoading = false;
+            this.selectedFileName = null; // Reset after successful upload
           }
           this.cdr.detectChanges();
         },
@@ -134,6 +140,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
           this.uploadError = errorMsg;
           this.addMessage('error', `Failed to upload ${file.name}: ${errorMsg}`);
           this.isLoading = false;
+          this.selectedFileName = null; // Reset on error
           this.cdr.detectChanges();
         },
         complete: () => {
@@ -303,7 +310,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-    checkIfDocumentsUploaded() {
-      return this.messages.filter(m => m.type === 'system' && m.text.includes('uploaded successfully')).length === 0;
+    hasUploadedDocuments() {
+        return this.uploadedDocuments.length > 0;
     }
 }
