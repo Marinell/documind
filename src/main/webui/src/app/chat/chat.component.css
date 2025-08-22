@@ -313,7 +313,33 @@
   padding: 16px;
   border-radius: 8px;
   box-shadow: 0 4px 12px var(--shadow-color);
+  transition: all 0.3s ease-in-out;
 }
+
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.chart-header h3 {
+    margin: 0;
+}
+
+.chart-controls button {
+    margin-left: 10px;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+}
+
+.charting-area.collapsed .chart-canvas-container {
+    height: 0;
+    padding: 0;
+    overflow: hidden;
+    box-shadow: none;
+}
+
 
 .loading-overlay {
     position: absolute;

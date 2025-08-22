@@ -63,14 +63,20 @@
                           placeholder="Ask a question about your documents..."
                           (keydown.enter)="sendMessage(); $event.preventDefault()"
                           [disabled]="isLoading || !sessionId"></textarea>
-                <button (click)="sendMessage()" [disabled]="isLoading || !newMessage.trim() || !sessionId">Send</button>
+                <button (click)="sendMessage()" [disabled]="isLoading || !newMessage.trim() || !sessionId || !hasUploadedDocuments()">Send</button>
             </div>
         </section>
     </div>
 
     <!-- Charting area -->
-    <section class="charting-area" *ngIf="currentChartData">
-        <h3>Chart Visualization</h3>
+    <section class="charting-area" *ngIf="currentChartData" [class.collapsed]="isChartCollapsed">
+        <div class="chart-header">
+            <h3>Chart Visualization</h3>
+            <div class="chart-controls">
+                <button (click)="toggleChartCollapse()">{{ isChartCollapsed ? 'Expand' : 'Collapse' }}</button>
+                <button (click)="closeChart()">Close</button>
+            </div>
+        </div>
         <div class="chart-canvas-container">
             <canvas #chartCanvas></canvas>
         </div>
