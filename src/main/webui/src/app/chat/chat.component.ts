@@ -218,63 +218,65 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   renderChart(): void {
-      console.log('this.currentChartData: ', this.currentChartData);
-    if (!this.currentChartData) {
-      console.warn('Chart data or canvas not available for rendering.');
-      return;
-    }
-
-    if (this.chartInstance) {
-      this.chartInstance.destroy(); // Destroy previous chart instance
-    }
-
-    const chartConfig: any = {
-      type: this.currentChartData.chartType || 'bar', // 'bar', 'line', 'pie', etc.
-      data: {
-        labels: this.currentChartData.labels || [],
-        datasets: this.currentChartData.datasets || []
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false, // Adjust as needed
-        plugins: {
-          title: {
-            display: !!this.currentChartData.title,
-            text: this.currentChartData.title
-          },
-          legend: {
-            display: (this.currentChartData.datasets?.length > 1) // Show legend if multiple datasets
-          }
-        }
-        // Add more Chart.js options as needed (scales, etc.)
+    // Defer chart rendering to the next tick to ensure canvas is in the DOM
+    setTimeout(() => {
+      if (!this.currentChartData || !this.chartCanvas) {
+        console.warn('Chart data or canvas not available for rendering.');
+        return;
       }
-    };
 
-    // Default colors if not provided by LLM (good practice)
-    if (chartConfig.data.datasets) {
-        const defaultColors = [
-            { bg: 'rgba(54, 162, 235, 0.5)', border: 'rgba(54, 162, 235, 1)' }, // Blue
-            { bg: 'rgba(255, 99, 132, 0.5)', border: 'rgba(255, 99, 132, 1)' }, // Red
-            { bg: 'rgba(75, 192, 192, 0.5)', border: 'rgba(75, 192, 192, 1)' }, // Green
-            { bg: 'rgba(255, 206, 86, 0.5)', border: 'rgba(255, 206, 86, 1)' }, // Yellow
-            { bg: 'rgba(153, 102, 255, 0.5)', border: 'rgba(153, 102, 255, 1)' }, // Purple
-        ];
-        chartConfig.data.datasets.forEach((dataset: any, index: number) => {
-            if (!dataset.backgroundColor) {
-                dataset.backgroundColor = defaultColors[index % defaultColors.length].bg;
+      if (this.chartInstance) {
+        this.chartInstance.destroy(); // Destroy previous chart instance
+      }
+
+      const chartConfig: any = {
+        type: this.currentChartData.chartType || 'bar', // 'bar', 'line', 'pie', etc.
+        data: {
+          labels: this.currentChartData.labels || [],
+          datasets: this.currentChartData.datasets || []
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false, // Adjust as needed
+          plugins: {
+            title: {
+              display: !!this.currentChartData.title,
+              text: this.currentChartData.title
+            },
+            legend: {
+              display: (this.currentChartData.datasets?.length > 1) // Show legend if multiple datasets
             }
-            if (!dataset.borderColor) {
-                dataset.borderColor = defaultColors[index % defaultColors.length].border;
-            }
-            if (!dataset.borderWidth) {
-                 dataset.borderWidth = 1;
-            }
-        });
-    }
+          }
+          // Add more Chart.js options as needed (scales, etc.)
+        }
+      };
+
+      // Default colors if not provided by LLM (good practice)
+      if (chartConfig.data.datasets) {
+          const defaultColors = [
+              { bg: 'rgba(54, 162, 235, 0.5)', border: 'rgba(54, 162, 235, 1)' }, // Blue
+              { bg: 'rgba(255, 99, 132, 0.5)', border: 'rgba(255, 99, 132, 1)' }, // Red
+              { bg: 'rgba(75, 192, 192, 0.5)', border: 'rgba(75, 192, 192, 1)' }, // Green
+              { bg: 'rgba(255, 206, 86, 0.5)', border: 'rgba(255, 206, 86, 1)' }, // Yellow
+              { bg: 'rgba(153, 102, 255, 0.5)', border: 'rgba(153, 102, 255, 1)' }, // Purple
+          ];
+          chartConfig.data.datasets.forEach((dataset: any, index: number) => {
+              if (!dataset.backgroundColor) {
+                  dataset.backgroundColor = defaultColors[index % defaultColors.length].bg;
+              }
+              if (!dataset.borderColor) {
+                  dataset.borderColor = defaultColors[index % defaultColors.length].border;
+              }
+              if (!dataset.borderWidth) {
+                   dataset.borderWidth = 1;
+              }
+          });
+      }
 
 
-    this.chartInstance = new Chart(this.chartCanvas.nativeElement, chartConfig);
-    this.cdr.detectChanges(); // Ensure chart visibility updates
+      this.chartInstance = new Chart(this.chartCanvas.nativeElement, chartConfig);
+      this.cdr.detectChanges(); // Ensure chart visibility updates
+    }, 0);
   }
 
   addMessage(type: 'user' | 'assistant' | 'error' | 'system', text: string): void {

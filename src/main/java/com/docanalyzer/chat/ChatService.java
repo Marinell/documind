@@ -15,9 +15,7 @@ import org.jfree.chart.JFreeChart;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 @ApplicationScoped
@@ -130,6 +128,9 @@ public class ChatService {
     }
 
     private String parseResponse(String response) {
+        if (!response.contains("<think>")) {
+            return response;
+        }
         String parsedResponse = response.replace(response.substring(response.indexOf("<think>"), response.indexOf("</think>")+8), "");
         log.info("\nparsed response: \n" + parsedResponse);
         return parsedResponse;
@@ -138,6 +139,13 @@ public class ChatService {
     private void handleChartData(String sessionId, String chartJson, Consumer<Map<String, Object>> eventConsumer, Consumer<Throwable> onError) {
         try {
             Chart chart = objectMapper.readValue(chartJson, Chart.class);
+
+            List<String> labels = new ArrayList<>();
+            for (Chart.Dataset data: chart.getDatasets()) {
+                labels.add(data.getLabel());
+            }
+
+            chart.setLabels(labels);
 
             // Generate chart image
             JFreeChart jfreechart = chartService.createChart(chart);
@@ -216,11 +224,18 @@ public class ChatService {
                    {
                      "chartType": "bar",
                      "title": "Financial Data Overview",
-                     "labels": ["Revenue", "Expenses", "Profit"],
                      "datasets": [
                        {
-                         "label": "Financial Figures",
+                         "label": "Revenue",
                          "data": [100000, 50000, 50000]
+                       },
+                       {
+                         "label": "Expenses",
+                         "data": [3456, 1111, 2500]
+                       },
+                        {
+                         "label": "Profit",
+                         "data": [150000, 40000, 60000]
                        }
                      ]
                    }
@@ -251,10 +266,21 @@ public class ChatService {
                    {
                      "chartType": "bar|pie",
                      "title": "...",
-                     "labels": ["label_1", "label_2", "label_3", ... , "label_n"],
                      "datasets": [
                        {
-                         "label": "...",
+                         "label": "label_1",
+                         "data": [data_1, data_2, data_3, ... , data_n]
+                       },
+                       {
+                         "label": "label_2",
+                         "data": [data_1, data_2, data_3, ... , data_n]
+                       },
+                       {
+                         "label": "label_3",
+                         "data": [data_1, data_2, data_3, ... , data_n]
+                       },
+                       {
+                         "label": "label_n",
                          "data": [data_1, data_2, data_3, ... , data_n]
                        }
                      ]
