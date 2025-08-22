@@ -4,10 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.redis.datasource.RedisDataSource;
 import io.quarkus.redis.datasource.json.JsonCommands;
-import io.quarkus.redis.datasource.search.CreateArgs;
-import io.quarkus.redis.datasource.search.QueryArgs;
-import io.quarkus.redis.datasource.search.SearchCommands;
-import io.quarkus.redis.datasource.search.VectorAlgorithm;
+import io.quarkus.redis.datasource.search.*;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -37,18 +34,17 @@ public class RedisVectorStore {
     }
 
     public void createFtIndex() {
-        try {
-            searchCommands.ftInfo(INDEX_NAME);
-        } catch (Exception e) {
-            CreateArgs createArgs = new CreateArgs()
-                    .onJson()
-                    .prefix(PREFIX)
-                    .schema()
-                    .addTextField("sessionId", "sessionId")
-                    .addTextField("text", "text")
-                    .addVectorField("embedding", "embedding", VectorAlgorithm.HNSW, 6, "TYPE", "FLOAT32", "DIM", String.valueOf(EMBEDDING_DIMENSION), "DISTANCE_METRIC", "COSINE");
-            searchCommands.ftCreate(INDEX_NAME, createArgs);
+        if (searchCommands.ft_list().contains(INDEX_NAME)) {
+            return;
         }
+        CreateArgs createArgs = new CreateArgs()
+                .onJson()
+                .prefixes(PREFIX);
+        createArgs.indexedField("sessionId", "sessionId", FieldType.TEXT);
+        createArgs.indexedField("text", "text", FieldType.TEXT);
+        createArgs.indexedField("embedding", "embedding", FieldType.VECTOR);
+
+        searchCommands.ftCreate(INDEX_NAME, createArgs);
     }
 
     public void addDocumentChunk(String sessionId, String chunkId, String chunkText, double[] embedding) {
@@ -74,13 +70,8 @@ public class RedisVectorStore {
         searchCommands.ftSearch(INDEX_NAME, query, queryArgs)
                 .documents()
                 .forEach(doc -> {
-                    try {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> chunk = objectMapper.readValue(doc.content(), Map.class);
-                        similarChunks.add((String) chunk.get("text"));
-                    } catch (JsonProcessingException ex) {
-                        // ignore
-                    }
+                    // Map<String, Object> chunk = objectMapper.readValue(doc.properties()., Map.class);
+                    similarChunks.add((String) doc.properties().get("text").asString());
                 });
         return similarChunks;
     }

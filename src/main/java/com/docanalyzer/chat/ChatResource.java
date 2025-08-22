@@ -47,18 +47,6 @@ public class ChatResource {
         return Response.ok(Collections.singletonMap("sessionId", sessionId)).build();
     }
 
-    @DELETE
-    @Path("/{sessionId}")
-    @Operation(summary = "Clear chat session", description = "Clears all data associated with a chat session, including documents and anonymization mappings.")
-    public Response clearSession(@PathParam("sessionId") String sessionId) {
-        if (sessionId == null || sessionId.isBlank()) {
-            return Response.status(Response.Status.BAD_REQUEST).entity("Session ID cannot be empty").build();
-        }
-        chatService.clearChatSession(sessionId);
-        LOG.infof("Chat session cleared: %s", sessionId);
-        return Response.ok().build();
-    }
-
     @POST
     @Path("/{sessionId}/upload")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
