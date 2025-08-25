@@ -47,11 +47,12 @@ public class RedisVectorStore {
         createArgs.indexedField("$.sessionId", "sessionId", FieldType.TEXT);
         createArgs.indexedField("$.text", "text", FieldType.TEXT);
         createArgs.indexedField("$.id", "id", FieldType.NUMERIC);
+
         FieldOptions options = new FieldOptions();
         options.vectorAlgorithm(VectorAlgorithm.HNSW);
         options.distanceMetric(DistanceMetric.COSINE);
         options.dimension(EMBEDDING_DIMENSION);
-        options.vectorType(VectorType.FLOAT32);
+        options.vectorType(VectorType.FLOAT64);
         createArgs.indexedField("$.embedding", "embedding", FieldType.VECTOR, options);
 
         searchCommands.ftCreate(INDEX_NAME, createArgs);
@@ -76,7 +77,7 @@ public class RedisVectorStore {
     }
 
     public List<String> findSimilarChunks(String sessionId, double[] queryEmbedding, int k) {
-        String query = String.format("*=>[KNN %d @embedding $query_vector as score]", k);
+        String query = String.format("(*)=>[KNN %d @embedding $query_vector as score]", k);
         QueryArgs queryArgs = new QueryArgs()
                 .param("query_vector", toByteArray(queryEmbedding))
                 .dialect(2);
@@ -102,9 +103,9 @@ public class RedisVectorStore {
     }
 
     private byte[] toByteArray(double[] array) {
-        ByteBuffer buffer = ByteBuffer.allocate(array.length * Float.BYTES).order(ByteOrder.LITTLE_ENDIAN);
+        ByteBuffer buffer = ByteBuffer.allocate(array.length * Double.BYTES).order(ByteOrder.LITTLE_ENDIAN);
         for (double v : array) {
-            buffer.putFloat((float) v);
+            buffer.putDouble(v);
         }
         return buffer.array();
     }
