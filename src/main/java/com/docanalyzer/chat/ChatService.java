@@ -59,7 +59,7 @@ public class ChatService {
                 String chunk = chunks.get(i);
                 OllamaEmbeddingRequest request = new OllamaEmbeddingRequest("nomic-embed-text", chunk);
                 double[] embedding = ollamaClient.embed(request).getEmbedding();
-                vectorStore.addDocumentChunk(sessionId, sessionId + "-" + i, chunk, embedding);
+                vectorStore.addDocumentChunk(sessionId, i, chunk, embedding);
             }
         } catch (Exception e) {
             Log.errorf(e, "Error during document ingestion for session %s, file %s", sessionId, fileName);
@@ -77,7 +77,13 @@ public class ChatService {
         OllamaEmbeddingRequest embeddingRequest = new OllamaEmbeddingRequest("nomic-embed-text", userMessage);
         double[] userQueryEmbedding = ollamaClient.embed(embeddingRequest).getEmbedding();
         List<String> similarChunks = vectorStore.findSimilarChunks(sessionId, userQueryEmbedding, 5);
-        String context = similarChunks.stream().collect(Collectors.joining("\n---\n"));
+        if (similarChunks.isEmpty()) {
+            sendTextToken(eventConsumer, "no matches found in document");
+            return;
+        }
+        String context = String.join(" ", similarChunks);
+
+        log.info("CONTEXT: " + context);
 
         try {
             OllamaRequest request = new OllamaRequest(buildPrompt(userMessage, context));

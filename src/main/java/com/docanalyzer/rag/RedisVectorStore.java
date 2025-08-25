@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -45,6 +46,7 @@ public class RedisVectorStore {
 
         createArgs.indexedField("$.sessionId", "sessionId", FieldType.TEXT);
         createArgs.indexedField("$.text", "text", FieldType.TEXT);
+        createArgs.indexedField("$.id", "id", FieldType.NUMERIC);
         FieldOptions options = new FieldOptions();
         options.vectorAlgorithm(VectorAlgorithm.HNSW);
         options.distanceMetric(DistanceMetric.COSINE);
@@ -55,33 +57,47 @@ public class RedisVectorStore {
         searchCommands.ftCreate(INDEX_NAME, createArgs);
     }
 
-    public void addDocumentChunk(String sessionId, String chunkId, String chunkText, double[] embedding) {
+    public void addDocumentChunk(String sessionId, int chunkId, String chunkText, double[] embedding) {
+        String sanitizedSessionId = sanitizeSessionId(sessionId);
         Map<String, Object> doc = Map.of(
-                "sessionId", sessionId,
+                "id", chunkId,
+                "sessionId", sanitizedSessionId,
                 "text", chunkText,
                 "embedding", toByteArray(embedding)
         );
+        StringBuilder sb = new StringBuilder();
         try {
-            jsonCommands.jsonSet(PREFIX + chunkId, "$", objectMapper.writeValueAsString(doc));
+            jsonCommands.jsonSet(sb.append(PREFIX).append(sanitizedSessionId).append("_").append(chunkId).toString(),
+                    "$",
+                    objectMapper.writeValueAsString(doc));
         } catch (JsonProcessingException ex) {
             throw new RuntimeException(ex);
         }
     }
 
     public List<String> findSimilarChunks(String sessionId, double[] queryEmbedding, int k) {
-        //  {filter_query}=>[KNN {num} @field $query_vec]
-        String query = String.format("@sessionId:%s=>[KNN %d @embedding $query_vector as score]", sessionId, k);
+        String query = String.format("*=>[KNN %d @embedding $query_vector as score]", k);
         QueryArgs queryArgs = new QueryArgs()
                 .param("query_vector", toByteArray(queryEmbedding))
                 .dialect(2);
 
         List<String> similarChunks = new ArrayList<>();
-        searchCommands.ftSearch(INDEX_NAME, query, queryArgs)
-                .documents()
-                .forEach(doc -> {
-                    // Map<String, Object> chunk = objectMapper.readValue(doc.properties()., Map.class);
-                    similarChunks.add((String) doc.properties().get("text").asString());
-                });
+
+        List<Document> documents = searchCommands.ftSearch(INDEX_NAME, query, queryArgs).documents();
+        if (documents.isEmpty()) {
+            log.warn("no documents found");
+            query = "*";
+            queryArgs = new QueryArgs()
+                    .sortByAscending("id")
+                    .dialect(2)
+                    .limit(0, 1000);
+            documents = searchCommands.ftSearch(INDEX_NAME, query, queryArgs).documents();
+        }
+        documents.forEach(doc -> {
+            doc.properties().values().forEach(d ->
+                    similarChunks.add(d.asJsonObject().getString("text"))
+            );
+        });
         return similarChunks;
     }
 
@@ -91,5 +107,9 @@ public class RedisVectorStore {
             buffer.putFloat((float) v);
         }
         return buffer.array();
+    }
+
+    private String sanitizeSessionId(String input) {
+        return input.replace("-", "");
     }
 }
