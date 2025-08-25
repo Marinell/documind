@@ -58,8 +58,12 @@ public class ChatService {
             for (int i = 0; i < chunks.size(); i++) {
                 String chunk = chunks.get(i);
                 OllamaEmbeddingRequest request = new OllamaEmbeddingRequest("nomic-embed-text", chunk);
-                double[] embedding = ollamaClient.embed(request).getEmbedding();
-                vectorStore.addDocumentChunk(sessionId, i, chunk, embedding);
+                double[] doubleEmbedding = ollamaClient.embed(request).getEmbedding();
+                float[] floatEmbedding = new float[doubleEmbedding.length];
+                for (int j = 0; j < doubleEmbedding.length; j++) {
+                    floatEmbedding[j] = (float) doubleEmbedding[j];
+                }
+                vectorStore.addDocumentChunk(chunk, floatEmbedding);
             }
         } catch (Exception e) {
             Log.errorf(e, "Error during document ingestion for session %s, file %s", sessionId, fileName);
@@ -75,8 +79,13 @@ public class ChatService {
                                    Consumer<Map<String, Object>> eventConsumer,
                                    Consumer<String> onComplete, Consumer<Throwable> onError) {
         OllamaEmbeddingRequest embeddingRequest = new OllamaEmbeddingRequest("nomic-embed-text", userMessage);
-        double[] userQueryEmbedding = ollamaClient.embed(embeddingRequest).getEmbedding();
-        List<String> similarChunks = vectorStore.findSimilarChunks(sessionId, userQueryEmbedding, 5);
+        double[] doubleUserQueryEmbedding = ollamaClient.embed(embeddingRequest).getEmbedding();
+        float[] floatUserQueryEmbedding = new float[doubleUserQueryEmbedding.length];
+        for (int i = 0; i < doubleUserQueryEmbedding.length; i++) {
+            floatUserQueryEmbedding[i] = (float) doubleUserQueryEmbedding[i];
+        }
+
+        List<String> similarChunks = vectorStore.findSimilarChunks(floatUserQueryEmbedding, 5);
         if (similarChunks.isEmpty()) {
             sendTextToken(eventConsumer, "no matches found in document");
             return;

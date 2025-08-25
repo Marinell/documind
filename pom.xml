@@ -44,8 +44,9 @@
       <artifactId>quarkus-rest-jackson</artifactId>
     </dependency>
     <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-redis-client</artifactId>
+      <groupId>io.quarkiverse.langchain4j</groupId>
+      <artifactId>quarkus-langchain4j-redis</artifactId>
+      <version>0.12.0</version>
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
