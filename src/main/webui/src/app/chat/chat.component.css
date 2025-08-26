@@ -76,7 +76,6 @@
   font-size: 1.1rem;
   font-weight: 600;
   color: var(--text-color);
-  border-bottom: 1px solid var(--border-color);
   padding-bottom: 12px;
   margin-bottom: 20px;
 }
@@ -371,7 +370,55 @@
 }
 
 .rag-configs {
+    transition: all 0.3s ease-in-out;
+}
+
+.config-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+.config-header h3 {
+    margin-bottom: 0;
+}
+
+.collapse-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+.arrow {
+    border: solid black;
+    border-width: 0 2px 2px 0;
+    display: inline-block;
+    padding: 3px;
+    transform: rotate(-135deg);
+    -webkit-transform: rotate(-135deg);
+    transition: transform 0.3s;
+}
+
+.arrow.collapsed {
+    transform: rotate(45deg);
+    -webkit-transform: rotate(45deg);
+}
+
+.config-items {
+    padding-top: 20px;
+    overflow: hidden;
+    transition: all 0.3s ease-in-out;
+}
+
+.rag-configs {
     padding-top: 120px;
+}
+
+.rag-configs.collapsed .config-items {
+    height: 0;
+    padding-top: 0;
 }
 
 .config-item {

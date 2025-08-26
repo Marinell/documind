@@ -44,6 +44,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   currentChartData: any | null = null; // To store chart data
   private chartInstance: Chart | null = null; // To hold Chart.js instance
   isChartCollapsed: boolean = false;
+  isConfigCollapsed: boolean = true;
 
   selectedFileName: string | null = null;
   uploadedDocuments: string[] = [];
@@ -333,5 +334,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
             this.chartInstance.destroy();
             this.chartInstance = null;
         }
+    }
+
+    toggleConfigCollapse(): void {
+        this.isConfigCollapsed = !this.isConfigCollapsed;
     }
 }
