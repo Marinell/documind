@@ -35,13 +35,16 @@ public class ChatService {
     private final ChartService chartService;
     private final RedisVectorStore vectorStore;
     private final DocumentSplitter documentSplitter;
+    private final ChatHistoryRepository chatHistoryRepository;
+
 
     @Inject
-    public ChatService(@RestClient OllamaClient ollamaClient, ChartService chartService, RedisVectorStore vectorStore) {
+    public ChatService(@RestClient OllamaClient ollamaClient, ChartService chartService, RedisVectorStore vectorStore, ChatHistoryRepository chatHistoryRepository) {
         this.ollamaClient = ollamaClient;
         this.chartService = chartService;
         this.vectorStore = vectorStore;
         this.documentSplitter = new DocumentSplitter(512, 100);
+        this.chatHistoryRepository = chatHistoryRepository;
     }
 
     public String createNewChatSession() {
@@ -74,6 +77,10 @@ public class ChatService {
     public void streamChatResponse(String sessionId, String userMessage,
                                    Consumer<Map<String, Object>> eventConsumer,
                                    Consumer<String> onComplete, Consumer<Throwable> onError) {
+
+        chatHistoryRepository.addMessage(sessionId, "user", userMessage);
+        List<ChatHistoryRepository.ChatMessage> history = chatHistoryRepository.getHistory(sessionId);
+
         OllamaEmbeddingRequest embeddingRequest = new OllamaEmbeddingRequest("nomic-embed-text", userMessage);
         double[] userQueryEmbedding = ollamaClient.embed(embeddingRequest).getEmbedding();
         List<String> similarChunks = vectorStore.findSimilarChunks(sessionId, userQueryEmbedding, 5);
@@ -84,13 +91,15 @@ public class ChatService {
         String context = String.join("\n ---- \n ", similarChunks);
 
         try {
-            OllamaRequest request = new OllamaRequest(buildPrompt(userMessage, context));
+            OllamaRequest request = new OllamaRequest(buildPrompt(userMessage, context, history));
             log.info("deepseek request:\n" + request.getPrompt());
 
             OllamaResponse response = ollamaClient.generate(request);
             log.info("deepseek response:\n" + response.getResponse());
 
             String fullResponse = parseResponse(response.getResponse());
+            chatHistoryRepository.addMessage(sessionId, "assistant", fullResponse);
+
             int chartStart = fullResponse.indexOf(CHART_DATA_START_MARKER);
 
             if (chartStart != -1) {
@@ -167,8 +176,12 @@ public class ChatService {
         }
     }
 
-    private String buildPrompt(String userMessage, String document) {
-         return """
+    private String buildPrompt(String userMessage, String document, List<ChatHistoryRepository.ChatMessage> history) {
+        String historyString = history.stream()
+                .map(msg -> msg.author + ": " + msg.text)
+                .collect(Collectors.joining("\n"));
+
+        return """
                  ### ROLE ###
                  
                  Act as an expert document assistant, specialized in the business, financial, tax, and legal sector. Your role is to analyze the provided document text and answer the user's query about the document.
@@ -177,6 +190,7 @@ public class ChatService {
                  
                  - **Document Text Content**: The specific content of the document to be analyzed. (This will be provided separately.)
                  - **User Query**: The user's question or request regarding the document. (This will be provided separately.)
+                 - **Chat History**: The ongoing conversation between the user and the assistant.
                  
                  ### TASK ###
                  
@@ -274,7 +288,8 @@ public class ChatService {
                    CHART_DATA_END
                    ```"""
                  + "\nThe user query is: " + userMessage
-                 + "\nThe document text is: " + document;
+                 + "\nThe document text is: " + document
+                 + "\nThe chat history is: \n" + historyString;
     }
 
     private void sendTextToken(Consumer<Map<String, Object>> eventConsumer, String text) {
