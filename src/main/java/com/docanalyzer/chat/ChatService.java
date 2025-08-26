@@ -34,7 +34,6 @@ public class ChatService {
     private final OllamaClient ollamaClient;
     private final ChartService chartService;
     private final RedisVectorStore vectorStore;
-    private final DocumentSplitter documentSplitter;
     private final ChatHistoryRepository chatHistoryRepository;
     private final static int CHAT_HISTORY_MAX_SIZE = 15;
 
@@ -44,7 +43,6 @@ public class ChatService {
         this.ollamaClient = ollamaClient;
         this.chartService = chartService;
         this.vectorStore = vectorStore;
-        this.documentSplitter = new DocumentSplitter(512, 100);
         this.chatHistoryRepository = chatHistoryRepository;
     }
 
@@ -54,14 +52,20 @@ public class ChatService {
         return sessionId;
     }
 
-    public void ingestDocument(String sessionId, InputStream documentStream, String fileName) throws IOException {
+    public void ingestDocument(String sessionId, InputStream documentStream, String fileName, RagConfiguration ragConfiguration) throws IOException {
         try {
             Tika tika = new Tika();
             String text = tika.parseToString(documentStream);
-            List<String> chunks = documentSplitter.splitBySentence(text);
+            DocumentSplitter documentSplitter = new DocumentSplitter(ragConfiguration.chunkSize(), ragConfiguration.chunkOverlap());
+            List<String> chunks;
+            if ("sentence".equals(ragConfiguration.chunkingStrategy())) {
+                chunks = documentSplitter.splitBySentence(text);
+            } else {
+                chunks = documentSplitter.splitByRecursion(text);
+            }
             for (int i = 0; i < chunks.size(); i++) {
                 String chunk = chunks.get(i);
-                OllamaEmbeddingRequest request = new OllamaEmbeddingRequest("nomic-embed-text", chunk);
+                OllamaEmbeddingRequest request = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), chunk);
                 double[] embedding = ollamaClient.embed(request).getEmbedding();
                 vectorStore.addDocumentChunk(sessionId, i, chunk, embedding);
             }
@@ -75,14 +79,14 @@ public class ChatService {
     private static final String CHART_DATA_START_MARKER = "CHART_DATA_START";
     private static final String CHART_DATA_END_MARKER = "CHART_DATA_END";
 
-    public void streamChatResponse(String sessionId, String userMessage,
+    public void streamChatResponse(String sessionId, String userMessage, RagConfiguration ragConfiguration,
                                    Consumer<Map<String, Object>> eventConsumer,
                                    Consumer<String> onComplete, Consumer<Throwable> onError) {
 
         chatHistoryRepository.addMessage(sessionId, "user", userMessage);
         List<ChatHistoryRepository.ChatMessage> history = chatHistoryRepository.getHistory(sessionId);
 
-        OllamaEmbeddingRequest embeddingRequest = new OllamaEmbeddingRequest("nomic-embed-text", userMessage);
+        OllamaEmbeddingRequest embeddingRequest = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), userMessage);
         double[] userQueryEmbedding = ollamaClient.embed(embeddingRequest).getEmbedding();
         List<String> similarChunks = vectorStore.findSimilarChunks(sessionId, userQueryEmbedding, 5);
         if (similarChunks.isEmpty()) {
@@ -92,7 +96,7 @@ public class ChatService {
         String context = String.join("\n ---- \n ", similarChunks);
 
         try {
-            OllamaRequest request = new OllamaRequest(buildPrompt(userMessage, context, history));
+            OllamaRequest request = new OllamaRequest(ragConfiguration.llmModel(), buildPrompt(userMessage, context, history));
             log.info("deepseek request:\n" + request.getPrompt());
 
             OllamaResponse response = ollamaClient.generate(request);

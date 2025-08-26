@@ -53,7 +53,8 @@ public class ChatResource {
     @Produces(MediaType.APPLICATION_JSON)
     @Operation(summary = "Upload a document", description = "Uploads a document (PDF or TXT) to the specified chat session for processing.")
     public Response uploadDocument(@PathParam("sessionId") String sessionId,
-                                   @RestForm("file") FileUpload fileUpload) {
+                                   @RestForm("file") FileUpload fileUpload,
+                                   @QueryParam("config") String ragConfigJson) {
         if (sessionId == null || sessionId.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST).entity("Session ID cannot be empty").build();
         }
@@ -65,7 +66,8 @@ public class ChatResource {
                 sessionId, fileUpload.fileName(), fileUpload.contentType(), fileUpload.size());
 
         try (InputStream fileStream = Files.newInputStream(fileUpload.uploadedFile())) {
-            chatService.ingestDocument(sessionId, fileStream, fileUpload.fileName());
+            RagConfiguration ragConfiguration = RagConfiguration.fromJson(ragConfigJson);
+            chatService.ingestDocument(sessionId, fileStream, fileUpload.fileName(), ragConfiguration);
             return Response.ok(Collections.singletonMap("message", "File uploaded and processing started successfully for " + fileUpload.fileName())).build();
         } catch (ChatServiceException e) {
             LOG.errorf(e, "A chat service error occurred for session %s: %s", sessionId, e.getMessage());
@@ -90,11 +92,12 @@ public class ChatResource {
     @Operation(summary = "Send a message to the chat", description = "Sends a user message to the chat session and streams the LLM's response.")
     public StreamingOutput sendMessage(@PathParam("sessionId") String sessionId,
                                        @RequestBody(
-                                            description = "Message from the user",
-                                            required = true,
-                                            content = @Content(mediaType = MediaType.APPLICATION_JSON,
-                                                               schema = @Schema(implementation = UserMessage.class))
-                                       ) UserMessage userMessage) {
+                                               description = "Message from the user",
+                                               required = true,
+                                               content = @Content(mediaType = MediaType.APPLICATION_JSON,
+                                                       schema = @Schema(implementation = UserMessage.class))
+                                       ) UserMessage userMessage,
+                                       @QueryParam("config") String ragConfigJson) {
         if (sessionId == null || sessionId.isBlank()) {
             // Cannot throw WebApplicationException directly in lambda for StreamingOutput
             // Handle by sending an error event or closing stream.
@@ -116,72 +119,73 @@ public class ChatResource {
         }
 
         LOG.infof("Received message for session %s: %s", sessionId, userMessage.message);
+        RagConfiguration ragConfiguration = RagConfiguration.fromJson(ragConfigJson);
 
         return output -> {
             try {
-                chatService.streamChatResponse(sessionId, userMessage.message,
-                    eventMap -> { // eventMap is Map<String, Object>
-                        try {
-                            String eventType = (String) eventMap.getOrDefault("type", "message"); // Default type
-                            String jsonData = objectMapper.writeValueAsString(eventMap.get("data"));
-
-                            // Send specific event type if it's a chart, otherwise default SSE message event
-                            if ("chart".equals(eventType)) {
-                                output.write("event: chart\n".getBytes());
-                            }
-                            // For tokens, no explicit event name, just data (standard SSE 'message' event)
-                            // output.write("event: token\n".getBytes()); // Could also do this
-
-                            output.write(("data: " + jsonData + "\n\n").getBytes());
-                            output.flush();
-                        } catch (JsonProcessingException e) {
-                            LOG.errorf(e, "Error serializing event data to JSON for session %s", sessionId);
-                            // Potentially send an error event to client
-                        } catch (IOException e) {
-                            LOG.errorf(e, "IOException while streaming event to client for session %s", sessionId);
-                            throw new RuntimeException("Client disconnected or stream broken", e);
-                        }
-                    },
-                    onComplete -> {
-                        try {
-                            output.write("event: complete\n".getBytes());
-                            output.write(("data: {\"message\": \"Stream finished\"}\n\n").getBytes());
-                            output.flush();
-                            LOG.infof("Stream completed for session %s", sessionId);
-                        } catch (IOException e) {
-                            LOG.errorf(e, "IOException while sending completion event for session %s", sessionId);
-                        } finally {
+                chatService.streamChatResponse(sessionId, userMessage.message, ragConfiguration,
+                        eventMap -> { // eventMap is Map<String, Object>
                             try {
-                                output.close();
+                                String eventType = (String) eventMap.getOrDefault("type", "message"); // Default type
+                                String jsonData = objectMapper.writeValueAsString(eventMap.get("data"));
+
+                                // Send specific event type if it's a chart, otherwise default SSE message event
+                                if ("chart".equals(eventType)) {
+                                    output.write("event: chart\n".getBytes());
+                                }
+                                // For tokens, no explicit event name, just data (standard SSE 'message' event)
+                                // output.write("event: token\n".getBytes()); // Could also do this
+
+                                output.write(("data: " + jsonData + "\n\n").getBytes());
+                                output.flush();
+                            } catch (JsonProcessingException e) {
+                                LOG.errorf(e, "Error serializing event data to JSON for session %s", sessionId);
+                                // Potentially send an error event to client
                             } catch (IOException e) {
-                                LOG.warnf(e, "Error closing SSE stream for session %s", sessionId);
+                                LOG.errorf(e, "IOException while streaming event to client for session %s", sessionId);
+                                throw new RuntimeException("Client disconnected or stream broken", e);
                             }
-                        }
-                    },
-                    onError -> {
-                        try {
-                            output.write("event: error\n".getBytes());
-                            // Sanitize error message before sending to client
-                            String clientError = "An error occurred during chat processing.";
-                            if (onError instanceof IllegalStateException) {
-                                clientError = onError.getMessage(); // Safe to pass some specific errors
-                            }
-                            output.write(("data: {\"error\": \"" + clientError.replace("\"", "\\\"") + "\"}\n\n").getBytes());
-                            output.flush();
-                            LOG.errorf(onError, "Error event sent to client for session %s", sessionId);
-                        } catch (IOException e) {
-                            LOG.errorf(e, "IOException while sending error event for session %s", sessionId);
-                        } finally {
-                           try {
-                                output.close();
+                        },
+                        onComplete -> {
+                            try {
+                                output.write("event: complete\n".getBytes());
+                                output.write(("data: {\"message\": \"Stream finished\"}\n\n").getBytes());
+                                output.flush();
+                                LOG.infof("Stream completed for session %s", sessionId);
                             } catch (IOException e) {
-                                LOG.warnf(e, "Error closing SSE stream after error for session %s", sessionId);
+                                LOG.errorf(e, "IOException while sending completion event for session %s", sessionId);
+                            } finally {
+                                try {
+                                    output.close();
+                                } catch (IOException e) {
+                                    LOG.warnf(e, "Error closing SSE stream for session %s", sessionId);
+                                }
                             }
-                        }
-                    });
+                        },
+                        onError -> {
+                            try {
+                                output.write("event: error\n".getBytes());
+                                // Sanitize error message before sending to client
+                                String clientError = "An error occurred during chat processing.";
+                                if (onError instanceof IllegalStateException) {
+                                    clientError = onError.getMessage(); // Safe to pass some specific errors
+                                }
+                                output.write(("data: {\"error\": \"" + clientError.replace("\"", "\\\"") + "\"}\n\n").getBytes());
+                                output.flush();
+                                LOG.errorf(onError, "Error event sent to client for session %s", sessionId);
+                            } catch (IOException e) {
+                                LOG.errorf(e, "IOException while sending error event for session %s", sessionId);
+                            } finally {
+                                try {
+                                    output.close();
+                                } catch (IOException e) {
+                                    LOG.warnf(e, "Error closing SSE stream after error for session %s", sessionId);
+                                }
+                            }
+                        });
             } catch (Exception e) {
                 LOG.errorf(e, "Unhandled exception in StreamingOutput for session %s", sessionId);
-                 try {
+                try {
                     output.write("event: error\n".getBytes());
                     output.write(("data: {\"error\": \"Failed to initiate chat stream.\"}\n\n").getBytes());
                     output.flush();

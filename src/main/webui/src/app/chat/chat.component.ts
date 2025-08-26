@@ -27,6 +27,13 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('fileInput') fileInput!: ElementRef<HTMLInputElement>;
   @ViewChild('chartCanvas') chartCanvas!: ElementRef<HTMLCanvasElement>; // For Chart.js
 
+  ragConfig = {
+    chunkingStrategy: 'recursive',
+    chunkSize: 512,
+    chunkOverlap: 100,
+    llmModel: 'deepseek-r1:1.5b',
+    embeddingModel: 'nomic-embed-text'
+  };
   sessionId: string | null = null;
   messages: ChatMessage[] = [];
   newMessage: string = '';
@@ -119,7 +126,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
       this.isLoading = true;
       this.addMessage('system', `Uploading ${file.name}...`);
 
-      this.apiService.uploadDocument(this.sessionId, file).subscribe({
+      this.apiService.uploadDocument(this.sessionId, file, this.ragConfig).subscribe({
         next: (httpEvent) => {
           if (httpEvent.type === HttpEventType.UploadProgress && httpEvent.total) {
             this.uploadProgress = Math.round(100 * httpEvent.loaded / httpEvent.total);
@@ -179,7 +186,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
         this.streamSubscription.unsubscribe();
     }
 
-    this.streamSubscription = this.apiService.sendMessage(this.sessionId, userMessageToSend).subscribe({
+    this.streamSubscription = this.apiService.sendMessage(this.sessionId, userMessageToSend, this.ragConfig).subscribe({
       next: (event: StreamEvent) => {
         switch (event.type) {
           case 'token':

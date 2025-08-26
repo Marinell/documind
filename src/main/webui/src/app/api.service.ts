@@ -44,11 +44,11 @@ export class ApiService {
     );
   }
 
-  uploadDocument(sessionId: string, file: File): Observable<HttpEvent<UploadResponse>> {
+  uploadDocument(sessionId: string, file: File, ragConfig: any): Observable<HttpEvent<UploadResponse>> {
     const formData: FormData = new FormData();
     formData.append('file', file, file.name);
 
-    const req = new HttpRequest('POST', `${this.apiUrl}/${sessionId}/upload`, formData, {
+    const req = new HttpRequest('POST', `${this.apiUrl}/${sessionId}/upload?config=${encodeURIComponent(JSON.stringify(ragConfig))}`, formData, {
       reportProgress: true, // For upload progress tracking if needed
     });
 
@@ -63,7 +63,7 @@ export class ApiService {
   // If it's POST, then EventSource cannot be used directly like this.
   // The fetch-based approach (commented out earlier) would be needed for POST + SSE.
   // For now, assuming GET /.../messageStream?message=... from previous decision.
-  sendMessage(sessionId: string, message: string): Observable<StreamEvent> {
+  sendMessage(sessionId: string, message: string, ragConfig: any): Observable<StreamEvent> {
     const subject = new Subject<StreamEvent>();
 
     // Check: The backend ChatResource's @POST /message was NOT changed to GET.
@@ -76,7 +76,7 @@ export class ApiService {
     // const es = new EventSource(eventSourceUrl); // THIS WON'T WORK WITH THE CURRENT POST BACKEND
 
     // Using Fetch API to handle SSE with POST request
-    fetch(`${this.apiUrl}/${sessionId}/message`, {
+    fetch(`${this.apiUrl}/${sessionId}/message?config=${encodeURIComponent(JSON.stringify(ragConfig))}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: message })

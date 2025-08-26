@@ -33,6 +33,40 @@
                     </li>
                 </ul>
             </div>
+
+            <hr>
+
+            <div class="rag-configs">
+                <h3>Configurations</h3>
+
+                <div class="config-item">
+                    <label for="chunking-strategy">Chunking Strategy</label>
+                    <select id="chunking-strategy" [(ngModel)]="ragConfig.chunkingStrategy" [disabled]="isLoading">
+                        <option value="recursive">Recursive</option>
+                        <option value="sentence">Sentence</option>
+                    </select>
+                </div>
+
+                <div class="config-item">
+                    <label for="chunk-size">Chunk Size</label>
+                    <input id="chunk-size" type="number" [(ngModel)]="ragConfig.chunkSize" [disabled]="isLoading">
+                </div>
+
+                <div class="config-item">
+                    <label for="chunk-overlap">Chunk Overlap</label>
+                    <input id="chunk-overlap" type="number" [(ngModel)]="ragConfig.chunkOverlap" [disabled]="isLoading">
+                </div>
+
+                <div class="config-item">
+                    <label for="llm-model">LLM Model</label>
+                    <input id="llm-model" type="text" [(ngModel)]="ragConfig.llmModel" [disabled]="isLoading">
+                </div>
+
+                <div class="config-item">
+                    <label for="embedding-model">Embedding Model</label>
+                    <input id="embedding-model" type="text" [(ngModel)]="ragConfig.embeddingModel" [disabled]="isLoading">
+                </div>
+            </div>
         </aside>
 
         <section class="chat-area">
