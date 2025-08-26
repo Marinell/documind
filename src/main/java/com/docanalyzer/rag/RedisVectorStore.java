@@ -7,14 +7,12 @@ import io.quarkus.redis.datasource.json.JsonCommands;
 import io.quarkus.redis.datasource.search.*;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.json.JsonObject;
 import lombok.extern.slf4j.Slf4j;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @ApplicationScoped
 @Slf4j
@@ -79,7 +77,7 @@ public class RedisVectorStore {
     public List<String> findSimilarChunks(String sessionId, double[] queryEmbedding, int k) {
         String query = String.format("(*)=>[KNN %d @embedding $query_vector as score]", k);
         QueryArgs queryArgs = new QueryArgs()
-                .param("query_vector", toByteArray(queryEmbedding))
+                .param("query_vector", toBase64Encoding(queryEmbedding))
                 .dialect(2);
 
         List<String> similarChunks = new ArrayList<>();
@@ -108,6 +106,12 @@ public class RedisVectorStore {
             buffer.putDouble(v);
         }
         return buffer.array();
+    }
+
+    private String toBase64Encoding(double[] queryVector) {
+        ByteBuffer buffer = ByteBuffer.allocate(8 * queryVector.length).order(ByteOrder.LITTLE_ENDIAN);
+        for (double v : queryVector) buffer.putDouble(v);
+        return Base64.getEncoder().encodeToString(buffer.array());
     }
 
     private String sanitizeSessionId(String input) {
