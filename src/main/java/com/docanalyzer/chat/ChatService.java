@@ -58,7 +58,7 @@ public class ChatService {
         try {
             Tika tika = new Tika();
             String text = tika.parseToString(documentStream);
-            List<String> chunks = documentSplitter.split(text);
+            List<String> chunks = documentSplitter.splitBySentence(text);
             for (int i = 0; i < chunks.size(); i++) {
                 String chunk = chunks.get(i);
                 OllamaEmbeddingRequest request = new OllamaEmbeddingRequest("nomic-embed-text", chunk);
