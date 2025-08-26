@@ -60,7 +60,7 @@ public class RedisVectorStore {
 
         Map<String, Object> doc = new HashMap<>();
         doc.put("id", String.valueOf(chunkId));
-        doc.put("sessionId", sanitizedSessionId.getBytes(StandardCharsets.UTF_8));
+        doc.put("sessionId", sanitizedSessionId);
         doc.put("text", chunkText);
         doc.put("embedding", toByteArray(embedding));
 
@@ -68,9 +68,10 @@ public class RedisVectorStore {
     }
 
     public List<String> findSimilarChunks(String sessionId, double[] queryEmbedding, int k) {
-        String query = String.format("(*)=>[KNN %d @embedding $query_vector as score]", k);
+        String query = String.format("(@sessionId:$sessionId)=>[KNN %d @embedding $query_vector as score]", k);
         QueryArgs queryArgs = new QueryArgs()
                 .param("query_vector", toByteArray(queryEmbedding))
+                .param("sessionId", sanitizeSessionId(sessionId))
                 .dialect(2);
 
         List<String> similarChunks = new ArrayList<>();

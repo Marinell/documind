@@ -81,9 +81,7 @@ public class ChatService {
             sendTextToken(eventConsumer, "no matches found in document");
             return;
         }
-        String context = String.join(" ", similarChunks);
-
-        log.info("CONTEXT: " + context);
+        String context = String.join("\n ---- \n ", similarChunks);
 
         try {
             OllamaRequest request = new OllamaRequest(buildPrompt(userMessage, context));
