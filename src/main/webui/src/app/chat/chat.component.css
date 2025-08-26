@@ -3,7 +3,7 @@
   flex-direction: column;
   height: calc(100vh - 80px); /* Adjust based on global header/footer */
   margin: 0 auto;
-  max-width: 1400px;
+  max-width: 1600px;
   background-color: var(--surface-color);
   border-radius: 12px;
   box-shadow: 0 8px 24px var(--shadow-color);
@@ -368,6 +368,14 @@
     margin-top: 10px;
     font-size: 1rem;
     color: var(--text-color);
+}
+
+.rag-configs {
+    padding-top: 120px;
+}
+
+.config-item {
+    padding-bottom: 10px;
 }
 
 @keyframes spin {
