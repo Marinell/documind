@@ -36,6 +36,7 @@ public class ChatService {
     private final RedisVectorStore vectorStore;
     private final DocumentSplitter documentSplitter;
     private final ChatHistoryRepository chatHistoryRepository;
+    private final static int CHAT_HISTORY_MAX_SIZE = 15;
 
 
     @Inject
@@ -177,7 +178,10 @@ public class ChatService {
     }
 
     private String buildPrompt(String userMessage, String document, List<ChatHistoryRepository.ChatMessage> history) {
-        String historyString = history.stream()
+        int historySize = history.size();
+        String historyString = history
+                .subList(historySize < CHAT_HISTORY_MAX_SIZE ? 0 : (historySize - CHAT_HISTORY_MAX_SIZE), historySize)
+                .stream()
                 .map(msg -> msg.author + ": " + msg.text)
                 .collect(Collectors.joining("\n"));
 

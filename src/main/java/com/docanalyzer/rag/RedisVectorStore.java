@@ -72,6 +72,7 @@ public class RedisVectorStore {
         QueryArgs queryArgs = new QueryArgs()
                 .param("query_vector", toByteArray(queryEmbedding))
                 .param("sessionId", sanitizeSessionId(sessionId))
+                .sortByAscending("id")
                 .dialect(2);
 
         List<String> similarChunks = new ArrayList<>();
