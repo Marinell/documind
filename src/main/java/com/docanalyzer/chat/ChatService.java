@@ -4,6 +4,8 @@ import com.docanalyzer.ollama.OllamaClient;
 import com.docanalyzer.ollama.OllamaEmbeddingRequest;
 import com.docanalyzer.ollama.OllamaRequest;
 import com.docanalyzer.ollama.OllamaResponse;
+import com.docanalyzer.ollama.OllamaVisionRequest;
+import com.docanalyzer.ollama.OllamaVisionResponse;
 import com.docanalyzer.rag.DocumentSplitter;
 import com.docanalyzer.rag.RedisVectorStore;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -56,30 +58,45 @@ public class ChatService {
 
     public void ingestDocument(String sessionId, InputStream documentStream, String fileName, RagConfiguration ragConfiguration) throws IOException {
         try {
-            DocumentSplitter documentSplitter = new DocumentSplitter(ragConfiguration.chunkSize(), ragConfiguration.chunkOverlap());
-            List<String> chunks;
+            Tika tika = new Tika();
+            String mediaType = tika.detect(documentStream, fileName);
 
-            if ("sentence".equals(ragConfiguration.chunkingStrategy())) {
-                // Use the streaming approach for sentence splitting to avoid OOM.
-                try (Reader reader = new ParsingReader(documentStream)) {
-                    chunks = documentSplitter.splitBySentence(reader);
-                }
-            } else if ("semantic".equals(ragConfiguration.chunkingStrategy())) {
-                try (Reader reader = new ParsingReader(documentStream)) {
-                    chunks = documentSplitter.splitBySemantic(reader, new OllamaEmbeddingModel(ollamaClient, ragConfiguration.embeddingModel()));
-                }
-            } else {
-                // Fallback for other strategies. WARNING: This path is not memory-safe for large files.
-                Tika tika = new Tika();
-                String text = tika.parseToString(documentStream);
-                chunks = documentSplitter.splitByRecursion(text);
-            }
+            if (mediaType != null && mediaType.startsWith("image/")) {
+                byte[] imageBytes = documentStream.readAllBytes();
+                String base64Image = java.util.Base64.getEncoder().encodeToString(imageBytes);
+                OllamaVisionRequest visionRequest = new OllamaVisionRequest(ragConfiguration.visionModel(), "Describe the image in detail.", List.of(base64Image), false);
+                OllamaVisionResponse visionResponse = ollamaClient.generate(visionRequest);
+                String imageDescription = visionResponse.getResponse();
 
-            for (int i = 0; i < chunks.size(); i++) {
-                String chunk = chunks.get(i);
-                OllamaEmbeddingRequest request = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), chunk);
+                OllamaEmbeddingRequest request = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), imageDescription);
                 double[] embedding = ollamaClient.embed(request).getEmbedding();
-                vectorStore.addDocumentChunk(sessionId, i, chunk, embedding);
+                vectorStore.addDocumentChunk(sessionId, 0, imageDescription, embedding);
+                vectorStore.addVisionDescription(sessionId, imageDescription);
+
+            } else {
+                DocumentSplitter documentSplitter = new DocumentSplitter(ragConfiguration.chunkSize(), ragConfiguration.chunkOverlap());
+                List<String> chunks;
+
+                if ("sentence".equals(ragConfiguration.chunkingStrategy())) {
+                    try (Reader reader = new ParsingReader(documentStream)) {
+                        chunks = documentSplitter.splitBySentence(reader);
+                    }
+                } else if ("semantic".equals(ragConfiguration.chunkingStrategy())) {
+                    try (Reader reader = new ParsingReader(documentStream)) {
+                        chunks = documentSplitter.splitBySemantic(reader, new OllamaEmbeddingModel(ollamaClient, ragConfiguration.embeddingModel()));
+                    }
+                } else {
+                    Tika textTika = new Tika();
+                    String text = textTika.parseToString(documentStream);
+                    chunks = documentSplitter.splitByRecursion(text);
+                }
+
+                for (int i = 0; i < chunks.size(); i++) {
+                    String chunk = chunks.get(i);
+                    OllamaEmbeddingRequest request = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), chunk);
+                    double[] embedding = ollamaClient.embed(request).getEmbedding();
+                    vectorStore.addDocumentChunk(sessionId, i, chunk, embedding);
+                }
             }
         } catch (Exception e) {
             Log.errorf(e, "Error during document ingestion for session %s, file %s", sessionId, fileName);
@@ -105,7 +122,13 @@ public class ChatService {
             sendTextToken(eventConsumer, "no matches found in document");
             return;
         }
-        String context = String.join("\n ---- \n ", similarChunks);
+
+        StringBuilder contextBuilder = new StringBuilder();
+        vectorStore.getVisionDescription(sessionId).ifPresent(description -> {
+            contextBuilder.append("Image Description: ").append(description).append("\n\n");
+        });
+        contextBuilder.append(String.join("\n ---- \n ", similarChunks));
+        String context = contextBuilder.toString();
 
         try {
             OllamaRequest request = new OllamaRequest(ragConfiguration.llmModel(), buildPrompt(userMessage, context, history));

@@ -108,4 +108,18 @@ public class RedisVectorStore {
     private String sanitizeSessionId(String input) {
         return input.replace("-", "");
     }
+
+    public void addVisionDescription(String sessionId, String description) {
+        String key = "vision:" + sanitizeSessionId(sessionId);
+        hashCommands.hset(key, Map.of("description", description));
+    }
+
+    public Optional<String> getVisionDescription(String sessionId) {
+        String key = "vision:" + sanitizeSessionId(sessionId);
+        Map<String, Object> result = hashCommands.hgetall(key);
+        if (result != null && result.containsKey("description")) {
+            return Optional.of((String) result.get("description"));
+        }
+        return Optional.empty();
+    }
 }

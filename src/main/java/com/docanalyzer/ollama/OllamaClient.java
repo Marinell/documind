@@ -15,6 +15,11 @@ public interface OllamaClient {
     OllamaResponse generate(OllamaRequest request);
 
     @POST
+    @Path("/api/generate")
+    @Consumes(MediaType.APPLICATION_JSON)
+    OllamaVisionResponse generate(OllamaVisionRequest request);
+
+    @POST
     @Path("/api/embeddings")
     @Consumes(MediaType.APPLICATION_JSON)
     OllamaEmbeddingResponse embed(OllamaEmbeddingRequest request);

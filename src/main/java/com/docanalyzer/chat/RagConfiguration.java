@@ -9,7 +9,8 @@ public record RagConfiguration(String chunkingStrategy,
                                int chunkSize,
                                int chunkOverlap,
                                String llmModel,
-                               String embeddingModel) {
+                               String embeddingModel,
+                               String visionModel) {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -18,17 +19,19 @@ public record RagConfiguration(String chunkingStrategy,
                             @JsonProperty("chunkSize") int chunkSize,
                             @JsonProperty("chunkOverlap") int chunkOverlap,
                             @JsonProperty("llmModel") String llmModel,
-                            @JsonProperty("embeddingModel") String embeddingModel) {
+                            @JsonProperty("embeddingModel") String embeddingModel,
+                            @JsonProperty("visionModel") String visionModel) {
         this.chunkingStrategy = chunkingStrategy;
         this.chunkSize = chunkSize;
         this.chunkOverlap = chunkOverlap;
         this.llmModel = llmModel;
         this.embeddingModel = embeddingModel;
+        this.visionModel = visionModel;
     }
 
     public static RagConfiguration fromJson(String json) {
         if (json == null || json.isBlank()) {
-            return new RagConfiguration("recursive", 512, 100, "deepseek-r1:1.5b", "nomic-embed-text");
+            return new RagConfiguration("recursive", 512, 100, "deepseek-r1:1.5b", "nomic-embed-text", "gemma3");
         }
         try {
             return OBJECT_MAPPER.readValue(json, RagConfiguration.class);
