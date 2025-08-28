@@ -19,7 +19,7 @@ public class RedisVectorStore {
 
     private static final String INDEX_NAME = "idx:document_chunks";
     private static final String PREFIX = "doc:";
-    private static final int EMBEDDING_DIMENSION = 768;
+    private static final int EMBEDDING_DIMENSION = 768; // 1024: bge
 
     private final HashCommands<String, String, Object> hashCommands;
     private final SearchCommands<String> searchCommands;

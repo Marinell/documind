@@ -47,7 +47,8 @@
                 <div class="config-items" *ngIf="!isConfigCollapsed">
                     <div class="config-item">
                         <label for="chunking-strategy">Chunking Strategy</label>
-                        <select id="chunking-strategy" [(ngModel)]="ragConfig.chunkingStrategy" [disabled]="isLoading">
+                        <select id="chunking-strategy" [(ngModel)]="ragConfig.chunkingStrategy"
+                                [disabled]="isLoading || hasUploadedDocuments()">
                             <option value="recursive">Recursive</option>
                             <option value="sentence">Sentence</option>
                         </select>
@@ -55,22 +56,32 @@
 
                     <div class="config-item">
                         <label for="chunk-size">Chunk Size</label>
-                        <input id="chunk-size" type="number" [(ngModel)]="ragConfig.chunkSize" [disabled]="isLoading">
+                        <input id="chunk-size" type="number" [(ngModel)]="ragConfig.chunkSize"
+                               [disabled]="isLoading || hasUploadedDocuments()">
                     </div>
 
                     <div class="config-item">
                         <label for="chunk-overlap">Chunk Overlap</label>
-                        <input id="chunk-overlap" type="number" [(ngModel)]="ragConfig.chunkOverlap" [disabled]="isLoading">
-                    </div>
-
-                    <div class="config-item">
-                        <label for="llm-model">LLM Model</label>
-                        <input id="llm-model" type="text" [(ngModel)]="ragConfig.llmModel" [disabled]="isLoading">
+                        <input id="chunk-overlap" type="number" [(ngModel)]="ragConfig.chunkOverlap"
+                               [disabled]="isLoading || hasUploadedDocuments()">
                     </div>
 
                     <div class="config-item">
                         <label for="embedding-model">Embedding Model</label>
-                        <input id="embedding-model" type="text" [(ngModel)]="ragConfig.embeddingModel" [disabled]="isLoading">
+                        <select id="embedding-model" [(ngModel)]="ragConfig.embeddingModel"
+                                [disabled]="isLoading || hasUploadedDocuments()">
+                            <option value="nomic-embed-text">Nomic (general purpose)</option>
+                            <option value="bge-m3:567m">BGE-M3 (multilingua)</option>
+                        </select>
+                    </div>
+
+                    <div class="config-item">
+                        <label for="llm-model">LLM Model</label>
+                        <select id="llm-model" [(ngModel)]="ragConfig.llmModel"
+                                [disabled]="isLoading">
+                            <option value="deepseek-r1:1.5b">Deepseek-r1:1.5b</option>
+                            <option value="deepseek-r1:7b">Deepseek-r1:7b (più lento)</option>
+                        </select>
                     </div>
                 </div>
             </div>

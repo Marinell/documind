@@ -1,5 +1,7 @@
 package com.docanalyzer.rag;
 
+import java.io.IOException;
+import java.io.Reader;
 import java.text.BreakIterator;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +18,91 @@ public class DocumentSplitter {
         }
         this.chunkSize = chunkSize;
         this.chunkOverlap = chunkOverlap;
+    }
+
+    public List<String> splitBySentence(Reader reader) throws IOException {
+        List<String> chunks = new ArrayList<>();
+        List<String> currentChunkSentences = new ArrayList<>();
+        StringBuilder textBuffer = new StringBuilder();
+        char[] buffer = new char[4096];
+        int charsRead;
+
+        // A list to hold sentences extracted from the buffer
+        List<String> sentences = new ArrayList<>();
+
+        while ((charsRead = reader.read(buffer)) != -1) {
+            textBuffer.append(buffer, 0, charsRead);
+            BreakIterator iterator = BreakIterator.getSentenceInstance(Locale.US);
+            iterator.setText(textBuffer.toString());
+
+            int start = iterator.first();
+            int end = iterator.next();
+            int lastProcessedEnd = 0;
+
+            // Find all complete sentences in the current buffer
+            while (end != BreakIterator.DONE && end < textBuffer.length()) {
+                String sentence = textBuffer.substring(start, end).trim();
+                if (!sentence.isEmpty()) {
+                    sentences.add(sentence);
+                }
+                lastProcessedEnd = end;
+                start = end;
+                end = iterator.next();
+            }
+            textBuffer.delete(0, lastProcessedEnd); // Keep the partial sentence
+        }
+
+        // Add any remaining text as the last sentence
+        if (!textBuffer.isEmpty()) {
+            sentences.add(textBuffer.toString().trim());
+        }
+
+        // Now, process the collected sentences with the correct chunking logic
+        int sentenceIndex = 0;
+        while (sentenceIndex < sentences.size()) {
+            String sentence = sentences.get(sentenceIndex);
+
+            if (sentence.length() > chunkSize) {
+                if (!currentChunkSentences.isEmpty()) {
+                    chunks.add(String.join(" ", currentChunkSentences));
+                    currentChunkSentences.clear();
+                }
+                chunks.add(sentence);
+                sentenceIndex++;
+                continue;
+            }
+
+            List<String> tempSentences = new ArrayList<>(currentChunkSentences);
+            tempSentences.add(sentence);
+            String tempChunk = String.join(" ", tempSentences);
+
+            if (tempChunk.length() > chunkSize && !currentChunkSentences.isEmpty()) {
+                chunks.add(String.join(" ", currentChunkSentences));
+
+                List<String> newChunkSentences = new ArrayList<>();
+                int overlapLength = 0;
+                for (int i = currentChunkSentences.size() - 1; i >= 0; i--) {
+                    String s = currentChunkSentences.get(i);
+                    if (overlapLength + s.length() + (newChunkSentences.isEmpty() ? 0 : 1) <= chunkOverlap) {
+                        newChunkSentences.add(0, s);
+                        overlapLength += s.length() + 1;
+                    } else {
+                        break;
+                    }
+                }
+                currentChunkSentences = newChunkSentences;
+                // Do not increment sentenceIndex, re-evaluate the current sentence
+            } else {
+                currentChunkSentences.add(sentence);
+                sentenceIndex++;
+            }
+        }
+
+        if (!currentChunkSentences.isEmpty()) {
+            chunks.add(String.join(" ", currentChunkSentences));
+        }
+
+        return chunks;
     }
 
     /**
@@ -55,83 +142,5 @@ public class DocumentSplitter {
         splitRecursive(remainingText, chunks);
     }
 
-    /**
-     * split based on sentence boundaries
-     * @param text
-     * @return
-     */
-    public List<String> splitBySentence(String text) {
-        if (text == null || text.isBlank()) {
-            return new ArrayList<>();
-        }
-
-        // 1. Split text into sentences
-        List<String> sentences = new ArrayList<>();
-        BreakIterator iterator = BreakIterator.getSentenceInstance(Locale.US);
-        iterator.setText(text);
-        int start = iterator.first();
-        for (int end = iterator.next(); end != BreakIterator.DONE; start = end, end = iterator.next()) {
-            String sentence = text.substring(start, end).trim();
-            if (!sentence.isEmpty()) {
-                sentences.add(sentence);
-            }
-        }
-
-        if (sentences.isEmpty()) {
-            return new ArrayList<>();
-        }
-
-        // 2. Group sentences into chunks
-        List<String> chunks = new ArrayList<>();
-        int sentenceIndex = 0;
-        List<String> currentChunkSentences = new ArrayList<>();
-
-        while (sentenceIndex < sentences.size()) {
-            String sentence = sentences.get(sentenceIndex);
-
-            // Handle sentences larger than chunkSize
-            if (sentence.length() > chunkSize) {
-                if (!currentChunkSentences.isEmpty()) {
-                    chunks.add(String.join(" ", currentChunkSentences));
-                    currentChunkSentences.clear();
-                }
-                chunks.add(sentence);
-                sentenceIndex++;
-                continue;
-            }
-
-            List<String> tempSentences = new ArrayList<>(currentChunkSentences);
-            tempSentences.add(sentence);
-            String tempChunk = String.join(" ", tempSentences);
-
-            if (tempChunk.length() > chunkSize && !currentChunkSentences.isEmpty()) {
-                chunks.add(String.join(" ", currentChunkSentences));
-
-                // Overlap
-                List<String> newChunkSentences = new ArrayList<>();
-                int overlapLength = 0;
-                for (int i = currentChunkSentences.size() - 1; i >= 0; i--) {
-                    String s = currentChunkSentences.get(i);
-                    if (overlapLength + s.length() + (newChunkSentences.isEmpty() ? 0 : 1) <= chunkOverlap) {
-                        newChunkSentences.add(0, s);
-                        overlapLength += s.length() + 1;
-                    } else {
-                        break;
-                    }
-                }
-                currentChunkSentences = newChunkSentences;
-                // Don't increment sentenceIndex, so the current sentence is considered for the new chunk
-            } else {
-                currentChunkSentences.add(sentence);
-                sentenceIndex++;
-            }
-        }
-
-        if (!currentChunkSentences.isEmpty()) {
-            chunks.add(String.join(" ", currentChunkSentences));
-        }
-
-        return chunks;
-    }
 
 }

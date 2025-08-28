@@ -13,12 +13,14 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
+import org.apache.tika.parser.ParsingReader;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jfree.chart.JFreeChart;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Reader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -54,15 +56,21 @@ public class ChatService {
 
     public void ingestDocument(String sessionId, InputStream documentStream, String fileName, RagConfiguration ragConfiguration) throws IOException {
         try {
-            Tika tika = new Tika();
-            String text = tika.parseToString(documentStream);
             DocumentSplitter documentSplitter = new DocumentSplitter(ragConfiguration.chunkSize(), ragConfiguration.chunkOverlap());
             List<String> chunks;
+
             if ("sentence".equals(ragConfiguration.chunkingStrategy())) {
-                chunks = documentSplitter.splitBySentence(text);
+                // Use the streaming approach for sentence splitting to avoid OOM.
+                try (Reader reader = new ParsingReader(documentStream)) {
+                    chunks = documentSplitter.splitBySentence(reader);
+                }
             } else {
+                // Fallback for other strategies. WARNING: This path is not memory-safe for large files.
+                Tika tika = new Tika();
+                String text = tika.parseToString(documentStream);
                 chunks = documentSplitter.splitByRecursion(text);
             }
+
             for (int i = 0; i < chunks.size(); i++) {
                 String chunk = chunks.get(i);
                 OllamaEmbeddingRequest request = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), chunk);
@@ -295,9 +303,9 @@ public class ChatService {
                    }
                    CHART_DATA_END
                    ```"""
-                 + "\nThe user query is: " + userMessage
-                 + "\nThe document text is: " + document
-                 + "\nThe chat history is: \n" + historyString;
+                + "\nThe user query is: " + userMessage
+                + "\nThe document text is: " + document
+                + "\nThe chat history is: \n" + historyString;
     }
 
     private void sendTextToken(Consumer<Map<String, Object>> eventConsumer, String text) {

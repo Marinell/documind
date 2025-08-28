@@ -423,6 +423,7 @@
 
 .config-item {
     padding-bottom: 10px;
+    display: grid;
 }
 
 @keyframes spin {
