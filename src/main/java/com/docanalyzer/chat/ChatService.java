@@ -100,7 +100,7 @@ public class ChatService {
 
         OllamaEmbeddingRequest embeddingRequest = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), userMessage);
         double[] userQueryEmbedding = ollamaClient.embed(embeddingRequest).getEmbedding();
-        List<String> similarChunks = vectorStore.findSimilarChunks(sessionId, userQueryEmbedding, 5);
+        List<String> similarChunks = vectorStore.findSimilarChunks(sessionId, userQueryEmbedding, 10);
         if (similarChunks.isEmpty()) {
             sendTextToken(eventConsumer, "no matches found in document");
             return;
