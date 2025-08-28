@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.redis.datasource.RedisDataSource;
 import io.quarkus.redis.datasource.list.ListCommands;
+import io.quarkus.redis.datasource.value.ValueCommands;
 import jakarta.enterprise.context.ApplicationScoped;
 import lombok.extern.slf4j.Slf4j;
 
@@ -15,11 +16,13 @@ import java.util.stream.Collectors;
 public class ChatHistoryRepository {
 
     private final ListCommands<String, String> listCommands;
+    private final ValueCommands<String, Integer> valueCommands;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
 
     public ChatHistoryRepository(RedisDataSource redisDataSource) {
         this.listCommands = redisDataSource.list(String.class, String.class);
+        this.valueCommands = redisDataSource.value(String.class, Integer.class);
     }
 
     public void addMessage(String sessionId, String author, String text) {
@@ -45,6 +48,15 @@ public class ChatHistoryRepository {
                 })
                 .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toList());
+    }
+
+    public void setBucketId(String sessionId, int bucketId) {
+        valueCommands.set("bucket_id:" + sessionId, bucketId);
+    }
+
+    public int getBucketId(String sessionId) {
+        Integer bucketId = valueCommands.get("bucket_id:" + sessionId);
+        return bucketId != null ? bucketId : 0;
     }
 
     public static class ChatMessage {

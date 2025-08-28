@@ -1,5 +1,6 @@
 package com.docanalyzer.chat;
 
+import com.docanalyzer.groundx.GroundxService;
 import com.docanalyzer.ollama.OllamaClient;
 import com.docanalyzer.ollama.OllamaEmbeddingRequest;
 import com.docanalyzer.ollama.OllamaRequest;
@@ -18,6 +19,7 @@ import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jfree.chart.JFreeChart;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
@@ -37,15 +39,17 @@ public class ChatService {
     private final ChartService chartService;
     private final RedisVectorStore vectorStore;
     private final ChatHistoryRepository chatHistoryRepository;
+    private final GroundxService groundxService;
     private final static int CHAT_HISTORY_MAX_SIZE = 15;
 
 
     @Inject
-    public ChatService(@RestClient OllamaClient ollamaClient, ChartService chartService, RedisVectorStore vectorStore, ChatHistoryRepository chatHistoryRepository) {
+    public ChatService(@RestClient OllamaClient ollamaClient, ChartService chartService, RedisVectorStore vectorStore, ChatHistoryRepository chatHistoryRepository, GroundxService groundxService) {
         this.ollamaClient = ollamaClient;
         this.chartService = chartService;
         this.vectorStore = vectorStore;
         this.chatHistoryRepository = chatHistoryRepository;
+        this.groundxService = groundxService;
     }
 
     public String createNewChatSession() {
@@ -55,35 +59,56 @@ public class ChatService {
     }
 
     public void ingestDocument(String sessionId, InputStream documentStream, String fileName, RagConfiguration ragConfiguration) throws IOException {
-        try {
-            DocumentSplitter documentSplitter = new DocumentSplitter(ragConfiguration.chunkSize(), ragConfiguration.chunkOverlap());
-            List<String> chunks;
-
-            if ("sentence".equals(ragConfiguration.chunkingStrategy())) {
-                // Use the streaming approach for sentence splitting to avoid OOM.
-                try (Reader reader = new ParsingReader(documentStream)) {
-                    chunks = documentSplitter.splitBySentence(reader);
+        if ("groundx".equalsIgnoreCase(ragConfiguration.ingestionStrategy())) {
+            try {
+                File tempFile = File.createTempFile("upload-", ".tmp");
+                tempFile.deleteOnExit();
+                try (FileOutputStream out = new FileOutputStream(tempFile)) {
+                    documentStream.transferTo(out);
                 }
-            } else if ("semantic".equals(ragConfiguration.chunkingStrategy())) {
-                try (Reader reader = new ParsingReader(documentStream)) {
-                    chunks = documentSplitter.splitBySemantic(reader, new OllamaEmbeddingModel(ollamaClient, ragConfiguration.embeddingModel()));
-                }
-            } else {
-                // Fallback for other strategies. WARNING: This path is not memory-safe for large files.
-                Tika tika = new Tika();
-                String text = tika.parseToString(documentStream);
-                chunks = documentSplitter.splitByRecursion(text);
-            }
 
-            for (int i = 0; i < chunks.size(); i++) {
-                String chunk = chunks.get(i);
-                OllamaEmbeddingRequest request = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), chunk);
-                double[] embedding = ollamaClient.embed(request).getEmbedding();
-                vectorStore.addDocumentChunk(sessionId, i, chunk, embedding);
+                String fileType = fileName.substring(fileName.lastIndexOf('.') + 1);
+
+                int bucketId = groundxService.ingestDocument(tempFile, fileName, fileType);
+                chatHistoryRepository.setBucketId(sessionId, bucketId);
+
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new ChatServiceException("GroundX ingestion was interrupted", e);
+            } catch (Exception e) {
+                throw new ChatServiceException("Failed to ingest document with GroundX: " + e.getMessage(), e);
             }
-        } catch (Exception e) {
-            Log.errorf(e, "Error during document ingestion for session %s, file %s", sessionId, fileName);
-            throw new ChatServiceException("Failed to ingest document: " + e.getMessage(), e);
+        } else {
+            try {
+                DocumentSplitter documentSplitter = new DocumentSplitter(ragConfiguration.chunkSize(), ragConfiguration.chunkOverlap());
+                List<String> chunks;
+
+                if ("sentence".equals(ragConfiguration.chunkingStrategy())) {
+                    // Use the streaming approach for sentence splitting to avoid OOM.
+                    try (Reader reader = new ParsingReader(documentStream)) {
+                        chunks = documentSplitter.splitBySentence(reader);
+                    }
+                } else if ("semantic".equals(ragConfiguration.chunkingStrategy())) {
+                    try (Reader reader = new ParsingReader(documentStream)) {
+                        chunks = documentSplitter.splitBySemantic(reader, new OllamaEmbeddingModel(ollamaClient, ragConfiguration.embeddingModel()));
+                    }
+                } else {
+                    // Fallback for other strategies. WARNING: This path is not memory-safe for large files.
+                    Tika tika = new Tika();
+                    String text = tika.parseToString(documentStream);
+                    chunks = documentSplitter.splitByRecursion(text);
+                }
+
+                for (int i = 0; i < chunks.size(); i++) {
+                    String chunk = chunks.get(i);
+                    OllamaEmbeddingRequest request = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), chunk);
+                    double[] embedding = ollamaClient.embed(request).getEmbedding();
+                    vectorStore.addDocumentChunk(sessionId, i, chunk, embedding);
+                }
+            } catch (Exception e) {
+                Log.errorf(e, "Error during document ingestion for session %s, file %s", sessionId, fileName);
+                throw new ChatServiceException("Failed to ingest document: " + e.getMessage(), e);
+            }
         }
     }
 
@@ -98,11 +123,24 @@ public class ChatService {
         chatHistoryRepository.addMessage(sessionId, "user", userMessage);
         List<ChatHistoryRepository.ChatMessage> history = chatHistoryRepository.getHistory(sessionId);
 
-        OllamaEmbeddingRequest embeddingRequest = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), userMessage);
-        double[] userQueryEmbedding = ollamaClient.embed(embeddingRequest).getEmbedding();
-        List<String> similarChunks = vectorStore.findSimilarChunks(sessionId, userQueryEmbedding, 5);
+        List<String> similarChunks;
+        if ("groundx".equalsIgnoreCase(ragConfiguration.ingestionStrategy())) {
+            int bucketId = chatHistoryRepository.getBucketId(sessionId);
+            if (bucketId == 0) {
+                sendTextToken(eventConsumer, "It seems no document has been ingested with GroundX for this session.");
+                onComplete.accept("Stream finished");
+                return;
+            }
+            similarChunks = groundxService.search(bucketId, userMessage);
+        } else {
+            OllamaEmbeddingRequest embeddingRequest = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), userMessage);
+            double[] userQueryEmbedding = ollamaClient.embed(embeddingRequest).getEmbedding();
+            similarChunks = vectorStore.findSimilarChunks(sessionId, userQueryEmbedding, 5);
+        }
+
         if (similarChunks.isEmpty()) {
             sendTextToken(eventConsumer, "no matches found in document");
+            onComplete.accept("Stream finished");
             return;
         }
         String context = String.join("\n ---- \n ", similarChunks);
