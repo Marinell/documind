@@ -134,6 +134,11 @@
       <artifactId>jfreechart-fx</artifactId>
       <version>1.0.1</version>
     </dependency>
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j</artifactId>
+      <version>0.23.0</version>
+    </dependency>
   </dependencies>
   <build>
     <plugins>

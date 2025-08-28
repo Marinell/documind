@@ -64,6 +64,10 @@ public class ChatService {
                 try (Reader reader = new ParsingReader(documentStream)) {
                     chunks = documentSplitter.splitBySentence(reader);
                 }
+            } else if ("semantic".equals(ragConfiguration.chunkingStrategy())) {
+                try (Reader reader = new ParsingReader(documentStream)) {
+                    chunks = documentSplitter.splitBySemantic(reader, new OllamaEmbeddingModel(ollamaClient, ragConfiguration.embeddingModel()));
+                }
             } else {
                 // Fallback for other strategies. WARNING: This path is not memory-safe for large files.
                 Tika tika = new Tika();
