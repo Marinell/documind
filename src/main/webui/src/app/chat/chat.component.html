@@ -43,6 +43,7 @@
                         <span class="arrow" [class.collapsed]="isConfigCollapsed"></span>
                     </button>
                 </div>
+                
 
                 <div class="config-items" *ngIf="!isConfigCollapsed">
                     <div class="config-item">
@@ -51,6 +52,7 @@
                                 [disabled]="isLoading || hasUploadedDocuments()">
                             <option value="recursive">Recursive</option>
                             <option value="sentence">Sentence</option>
+                            <option value="semantic">Semantic (not working)</option>
                         </select>
                     </div>
 
