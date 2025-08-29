@@ -14,6 +14,10 @@ import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.IOUtils;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.io.RandomAccessReadBuffer;
+import org.apache.pdfbox.io.RandomAccessReadBufferedFile;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.tika.Tika;
@@ -23,11 +27,7 @@ import org.jfree.chart.JFreeChart;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.Reader;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -63,11 +63,13 @@ public class ChatService {
 
     public void ingestDocument(String sessionId, InputStream documentStream, String fileName, RagConfiguration ragConfiguration) throws IOException {
         try {
+
+            byte[] bytes = IOUtils.toByteArray(documentStream);
             Tika tika = new Tika();
-            String mediaType = tika.detect(documentStream, fileName);
+            String mediaType = tika.detect(new ByteArrayInputStream(bytes), fileName);
 
             if (mediaType != null && mediaType.equals("application/pdf")) {
-                try (PDDocument document = PDDocument.load(documentStream)) {
+                try (PDDocument document = Loader.loadPDF(new RandomAccessReadBuffer(new ByteArrayInputStream(bytes)))) {
                     PDFRenderer pdfRenderer = new PDFRenderer(document);
                     for (int page = 0; page < document.getNumberOfPages(); ++page) {
                         BufferedImage bim = pdfRenderer.renderImageWithDPI(page, 300, org.apache.pdfbox.rendering.ImageType.RGB);
@@ -78,8 +80,7 @@ public class ChatService {
                     }
                 }
             } else if (mediaType != null && mediaType.startsWith("image/")) {
-                byte[] imageBytes = documentStream.readAllBytes();
-                processImage(sessionId, imageBytes, ragConfiguration, 0);
+                processImage(sessionId, bytes, ragConfiguration, 0);
 
             } else {
                 DocumentSplitter documentSplitter = new DocumentSplitter(ragConfiguration.chunkSize(), ragConfiguration.chunkOverlap());
@@ -114,12 +115,22 @@ public class ChatService {
 
     private void processImage(String sessionId, byte[] imageBytes, RagConfiguration ragConfiguration, int pageNumber) {
         String base64Image = java.util.Base64.getEncoder().encodeToString(imageBytes);
-        OllamaVisionRequest visionRequest = new OllamaVisionRequest(ragConfiguration.visionModel(), "Describe the image in detail.", List.of(base64Image), false);
+
+        OllamaVisionRequest visionRequest = new OllamaVisionRequest(
+                ragConfiguration.visionModel(),
+                "Describe the image in detail.",
+                List.of(base64Image)
+        );
         OllamaVisionResponse visionResponse = ollamaClient.generate(visionRequest);
         String imageDescription = visionResponse.getResponse();
 
+        log.info("\n\n IMAGE DESCRIPTION: \n\n" + imageDescription);
+
         OllamaEmbeddingRequest request = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), imageDescription);
         double[] embedding = ollamaClient.embed(request).getEmbedding();
+
+        log.info("\n\n IMAGE EMBEDDING: \n\n" + embedding);
+
         vectorStore.addDocumentChunk(sessionId, pageNumber, imageDescription, embedding);
         vectorStore.addVisionDescription(sessionId, imageDescription);
     }

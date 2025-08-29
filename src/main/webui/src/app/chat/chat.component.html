@@ -85,6 +85,14 @@
                             <option value="deepseek-r1:7b">Deepseek-r1:7b (più lento)</option>
                         </select>
                     </div>
+
+                    <div class="config-item">
+                        <label for="vision-model">Vision Model</label>
+                        <select id="vision-model" [(ngModel)]="ragConfig.visionModel"
+                                [disabled]="isLoading || hasUploadedDocuments()">
+                            <option value="gemma3:4b">gemma3:4b</option>
+                        </select>
+                    </div>
                 </div>
             </div>
         </aside>

@@ -32,7 +32,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewInit {
     chunkSize: 512,
     chunkOverlap: 100,
     llmModel: 'deepseek-r1:1.5b',
-    embeddingModel: 'nomic-embed-text'
+    embeddingModel: 'nomic-embed-text',
+    visionModel: 'gemma3:4b'
   };
   sessionId: string | null = null;
   messages: ChatMessage[] = [];
