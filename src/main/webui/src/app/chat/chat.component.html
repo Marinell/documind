@@ -43,20 +43,19 @@
                         <span class="arrow" [class.collapsed]="isConfigCollapsed"></span>
                     </button>
                 </div>
-                
+
 
                 <div class="config-items" *ngIf="!isConfigCollapsed">
                     <div class="config-item">
                         <label for="rag">Utilizza RAG</label>
                         <select id="rag" [(ngModel)]="ragConfig.useRag"
-                                (change)="onRagChange()"
                                 [disabled]="isLoading || hasUploadedDocuments()">
                             <option value=true>Sì</option>
                             <option value=false>No</option>
                         </select>
                     </div>
 
-                    <div *ngIf="showRagConfigs" class="config-item">
+                    <div *ngIf="ragConfig.useRag" class="config-item">
                         <label for="chunking-strategy">Chunking Strategy</label>
                         <select id="chunking-strategy" [(ngModel)]="ragConfig.chunkingStrategy"
                                 [disabled]="isLoading || hasUploadedDocuments()">
@@ -66,19 +65,19 @@
                         </select>
                     </div>
 
-                    <div class="config-item">
+                    <div *ngIf="ragConfig.useRag" class="config-item">
                         <label for="chunk-size">Chunk Size</label>
                         <input id="chunk-size" type="number" [(ngModel)]="ragConfig.chunkSize"
                                [disabled]="isLoading || hasUploadedDocuments()">
                     </div>
 
-                    <div class="config-item">
+                    <div *ngIf="ragConfig.useRag" class="config-item">
                         <label for="chunk-overlap">Chunk Overlap</label>
                         <input id="chunk-overlap" type="number" [(ngModel)]="ragConfig.chunkOverlap"
                                [disabled]="isLoading || hasUploadedDocuments()">
                     </div>
 
-                    <div class="config-item">
+                    <div *ngIf="ragConfig.useRag" class="config-item">
                         <label for="embedding-model">Embedding Model</label>
                         <select id="embedding-model" [(ngModel)]="ragConfig.embeddingModel"
                                 [disabled]="isLoading || hasUploadedDocuments()">
