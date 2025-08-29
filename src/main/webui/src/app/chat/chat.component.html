@@ -47,6 +47,16 @@
 
                 <div class="config-items" *ngIf="!isConfigCollapsed">
                     <div class="config-item">
+                        <label for="rag">Utilizza RAG</label>
+                        <select id="rag" [(ngModel)]="ragConfig.useRag"
+                                (change)="onRagChange()"
+                                [disabled]="isLoading || hasUploadedDocuments()">
+                            <option value=true>Sì</option>
+                            <option value=false>No</option>
+                        </select>
+                    </div>
+
+                    <div *ngIf="showRagConfigs" class="config-item">
                         <label for="chunking-strategy">Chunking Strategy</label>
                         <select id="chunking-strategy" [(ngModel)]="ragConfig.chunkingStrategy"
                                 [disabled]="isLoading || hasUploadedDocuments()">
@@ -81,8 +91,9 @@
                         <label for="llm-model">LLM Model</label>
                         <select id="llm-model" [(ngModel)]="ragConfig.llmModel"
                                 [disabled]="isLoading">
-                            <option value="deepseek-r1:1.5b">Deepseek-r1:1.5b</option>
-                            <option value="deepseek-r1:7b">Deepseek-r1:7b (più lento)</option>
+                            <option value="deepseek-r1:1.5b">deepseek-r1:1.5b</option>
+                            <option value="deepseek-r1:7b">deepseek-r1:7b (più lento)</option>
+                            <option value="gpt-oss:20b">gpt-oss:20b</option>
                         </select>
                     </div>
                 </div>

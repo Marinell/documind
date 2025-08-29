@@ -13,6 +13,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
+import org.apache.tika.exception.TikaException;
 import org.apache.tika.parser.ParsingReader;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jfree.chart.JFreeChart;
@@ -37,15 +38,22 @@ public class ChatService {
     private final ChartService chartService;
     private final RedisVectorStore vectorStore;
     private final ChatHistoryRepository chatHistoryRepository;
+    private final NoRAGDocumentTextRepository noRAGDocumentTextRepository;
     private final static int CHAT_HISTORY_MAX_SIZE = 15;
 
 
     @Inject
-    public ChatService(@RestClient OllamaClient ollamaClient, ChartService chartService, RedisVectorStore vectorStore, ChatHistoryRepository chatHistoryRepository) {
+    public ChatService(@RestClient OllamaClient ollamaClient,
+                       ChartService chartService,
+                       RedisVectorStore vectorStore,
+                       ChatHistoryRepository chatHistoryRepository,
+                       NoRAGDocumentTextRepository noRAGDocumentTextRepository
+    ) {
         this.ollamaClient = ollamaClient;
         this.chartService = chartService;
         this.vectorStore = vectorStore;
         this.chatHistoryRepository = chatHistoryRepository;
+        this.noRAGDocumentTextRepository = noRAGDocumentTextRepository;
     }
 
     public String createNewChatSession() {
@@ -57,33 +65,44 @@ public class ChatService {
     public void ingestDocument(String sessionId, InputStream documentStream, String fileName, RagConfiguration ragConfiguration) throws IOException {
         try {
             DocumentSplitter documentSplitter = new DocumentSplitter(ragConfiguration.chunkSize(), ragConfiguration.chunkOverlap());
-            List<String> chunks;
 
-            if ("sentence".equals(ragConfiguration.chunkingStrategy())) {
-                // Use the streaming approach for sentence splitting to avoid OOM.
-                try (Reader reader = new ParsingReader(documentStream)) {
-                    chunks = documentSplitter.splitBySentence(reader);
-                }
-            } else if ("semantic".equals(ragConfiguration.chunkingStrategy())) {
-                try (Reader reader = new ParsingReader(documentStream)) {
-                    chunks = documentSplitter.splitBySemantic(reader, new OllamaEmbeddingModel(ollamaClient, ragConfiguration.embeddingModel()));
-                }
-            } else {
-                // Fallback for other strategies. WARNING: This path is not memory-safe for large files.
+            if (!ragConfiguration.useRag()) {
                 Tika tika = new Tika();
                 String text = tika.parseToString(documentStream);
-                chunks = documentSplitter.splitByRecursion(text);
-            }
 
-            for (int i = 0; i < chunks.size(); i++) {
-                String chunk = chunks.get(i);
-                OllamaEmbeddingRequest request = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), chunk);
-                double[] embedding = ollamaClient.embed(request).getEmbedding();
-                vectorStore.addDocumentChunk(sessionId, i, chunk, embedding);
+                noRAGDocumentTextRepository.addText(sessionId, text);
+            } else {
+                ragChunking(sessionId, documentStream, ragConfiguration, documentSplitter);
             }
         } catch (Exception e) {
             Log.errorf(e, "Error during document ingestion for session %s, file %s", sessionId, fileName);
             throw new ChatServiceException("Failed to ingest document: " + e.getMessage(), e);
+        }
+    }
+
+    private void ragChunking(String sessionId, InputStream documentStream, RagConfiguration ragConfiguration, DocumentSplitter documentSplitter) throws IOException, TikaException {
+        List<String> chunks;
+        if ("sentence".equals(ragConfiguration.chunkingStrategy())) {
+            // Use the streaming approach for sentence splitting to avoid OOM.
+            try (Reader reader = new ParsingReader(documentStream)) {
+                chunks = documentSplitter.splitBySentence(reader);
+            }
+        } else if ("semantic".equals(ragConfiguration.chunkingStrategy())) {
+            try (Reader reader = new ParsingReader(documentStream)) {
+                chunks = documentSplitter.splitBySemantic(reader, new OllamaEmbeddingModel(ollamaClient, ragConfiguration.embeddingModel()));
+            }
+        } else {
+            // Fallback for other strategies. WARNING: This path is not memory-safe for large files.
+            Tika tika = new Tika();
+            String text = tika.parseToString(documentStream);
+            chunks = documentSplitter.splitByRecursion(text);
+        }
+
+        for (int i = 0; i < chunks.size(); i++) {
+            String chunk = chunks.get(i);
+            OllamaEmbeddingRequest request = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), chunk);
+            double[] embedding = ollamaClient.embed(request).getEmbedding();
+            vectorStore.addDocumentChunk(sessionId, i, chunk, embedding);
         }
     }
 
@@ -98,14 +117,19 @@ public class ChatService {
         chatHistoryRepository.addMessage(sessionId, "user", userMessage);
         List<ChatHistoryRepository.ChatMessage> history = chatHistoryRepository.getHistory(sessionId);
 
-        OllamaEmbeddingRequest embeddingRequest = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), userMessage);
-        double[] userQueryEmbedding = ollamaClient.embed(embeddingRequest).getEmbedding();
-        List<String> similarChunks = vectorStore.findSimilarChunks(sessionId, userQueryEmbedding, 10);
-        if (similarChunks.isEmpty()) {
-            sendTextToken(eventConsumer, "no matches found in document");
-            return;
+        String context = null;
+        if (!ragConfiguration.useRag()) {
+            context = String.join(" ", noRAGDocumentTextRepository.getText(sessionId));
+        } else {
+            OllamaEmbeddingRequest embeddingRequest = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), userMessage);
+            double[] userQueryEmbedding = ollamaClient.embed(embeddingRequest).getEmbedding();
+            List<String> similarChunks = vectorStore.findSimilarChunks(sessionId, userQueryEmbedding, 10);
+            if (similarChunks.isEmpty()) {
+                sendTextToken(eventConsumer, "no matches found in document");
+                return;
+            }
+            context = String.join("\n ---- \n ", similarChunks);
         }
-        String context = String.join("\n ---- \n ", similarChunks);
 
         try {
             OllamaRequest request = new OllamaRequest(ragConfiguration.llmModel(), buildPrompt(userMessage, context, history));
