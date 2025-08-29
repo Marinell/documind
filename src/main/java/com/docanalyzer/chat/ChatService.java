@@ -28,6 +28,7 @@ import org.jfree.chart.JFreeChart;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -63,7 +64,7 @@ public class ChatService {
 
     public void ingestDocument(String sessionId, InputStream documentStream, String fileName, RagConfiguration ragConfiguration) throws IOException {
         try {
-
+            log.info("\n\n************ INGEST DOCUMENT START **************\n\n");
             byte[] bytes = IOUtils.toByteArray(documentStream);
             Tika tika = new Tika();
             String mediaType = tika.detect(new ByteArrayInputStream(bytes), fileName);
@@ -71,11 +72,13 @@ public class ChatService {
             if (mediaType != null && mediaType.equals("application/pdf")) {
                 try (PDDocument document = Loader.loadPDF(new RandomAccessReadBuffer(new ByteArrayInputStream(bytes)))) {
                     PDFRenderer pdfRenderer = new PDFRenderer(document);
+                    log.info("\n\n************ PDF READ START **************\n\n");
                     for (int page = 0; page < document.getNumberOfPages(); ++page) {
                         BufferedImage bim = pdfRenderer.renderImageWithDPI(page, 300, org.apache.pdfbox.rendering.ImageType.RGB);
                         ByteArrayOutputStream baos = new ByteArrayOutputStream();
                         ImageIO.write(bim, "png", baos);
                         byte[] imageInByte = baos.toByteArray();
+                        log.info("\n start processing page: " + page);
                         processImage(sessionId, imageInByte, ragConfiguration, page);
                     }
                 }
@@ -118,18 +121,21 @@ public class ChatService {
 
         OllamaVisionRequest visionRequest = new OllamaVisionRequest(
                 ragConfiguration.visionModel(),
-                "Describe the image in detail.",
+                "Summarize the image content using simple words.",
                 List.of(base64Image)
         );
+
+        Instant now = Instant.now();
         OllamaVisionResponse visionResponse = ollamaClient.generate(visionRequest);
+        log.info("\n\nprocessImage took: " + (Instant.now().getEpochSecond() - now.getEpochSecond()));
         String imageDescription = visionResponse.getResponse();
 
-        log.info("\n\n IMAGE DESCRIPTION: \n\n" + imageDescription);
+        log.info("\n IMAGE DESCRIPTION: \n" + imageDescription);
 
         OllamaEmbeddingRequest request = new OllamaEmbeddingRequest(ragConfiguration.embeddingModel(), imageDescription);
         double[] embedding = ollamaClient.embed(request).getEmbedding();
 
-        log.info("\n\n IMAGE EMBEDDING: \n\n" + embedding);
+        log.info("\n IMAGE EMBEDDING: \n" + embedding);
 
         vectorStore.addDocumentChunk(sessionId, pageNumber, imageDescription, embedding);
         vectorStore.addVisionDescription(sessionId, imageDescription);
