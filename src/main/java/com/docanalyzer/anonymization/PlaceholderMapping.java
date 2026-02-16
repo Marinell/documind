@@ -29,7 +29,7 @@ public class PlaceholderMapping {
     @Column(nullable = false, name = "chat_session_id")
     private String chatSessionId; // To associate mappings with a specific chat session
 
-    @Column(nullable = false, unique = true) // Placeholder should be unique within a session, enforced by table constraint
+    @Column(nullable = false/*, unique = true*/) // Placeholder should be unique within a session, enforced by table constraint
     private String placeholder; // e.g., "[PERSON_1]", "[ADDRESS_A]"
 
     @Column(nullable = false, length = 1024) // Original value might be long
